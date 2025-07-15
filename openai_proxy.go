@@ -79,17 +79,16 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
 
+	tokens := 0
+
 	// Record input tokens
-	if t.tokenRecorder != nil {
-		m := cr.Messages[len(cr.Messages)-1].Content
-		message, ok := m.(string)
-		if ok {
-			tokens := len(message) / 4
-			log.Debugf("Recording %d input tokens", tokens)
-			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
-		} else {
-			log.Warnf("Failed to record input tokens for type %T", m)
-		}
+	m := cr.Messages[len(cr.Messages)-1].Content
+	message, ok := m.(string)
+	if ok {
+		tokens = len(message) / 4
+		log.Debugf("Recording %d input tokens", tokens)
+	} else {
+		log.Warnf("Failed to parse input for tokens for type %T", m)
 	}
 
 	// Make the actual request
@@ -111,8 +110,11 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		if len(chatResp.Choices) > 0 && t.tokenRecorder != nil {
 			message := chatResp.Choices[0].Message.Content
-			tokens := len(message) / 4
+			tokens += len(message) / 4
 			log.Debugf("Recording %d output tokens", tokens)
+		}
+
+		if tokens > 0 && t.tokenRecorder != nil {
 			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
 		}
 
@@ -135,7 +137,6 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		defer originalBody.Close()
 		defer pw.Close()
 
-		tokens := 0
 		scanner := bufio.NewScanner(originalBody)
 		for scanner.Scan() {
 			line := scanner.Text()
