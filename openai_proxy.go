@@ -58,12 +58,11 @@ type streamTransport struct {
 
 func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Check if this is a streaming request
-	var isStreaming bool
+	var cr chatRequest
 	if req.URL.Path == "/v1/chat/completions" {
-		var cr chatRequest
 		if body, err := io.ReadAll(req.Body); err == nil {
-			if err := json.Unmarshal(body, &cr); err == nil {
-				isStreaming = cr.Stream
+			if err := json.Unmarshal(body, &cr); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal request body: %w", err)
 			}
 			// Restore the body
 			req.Body = io.NopCloser(bytes.NewReader(body))
@@ -76,7 +75,20 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	if !isStreaming || resp.Header.Get("Content-Type") != "text/event-stream" {
+	apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+
+	if !cr.Stream || resp.Header.Get("Content-Type") != "text/event-stream" {
+		log.Debugf("Not streaming %v Content-Type: %v", req.URL.Path, resp.Header.Get("Content-Type"))
+
+		if t.tokenRecorder != nil {
+			m := cr.Messages[len(cr.Messages)-1].Content
+			message, ok := m.(string)
+			if ok {
+				t.tokenRecorder.Record(apiKey, cr.Model, len(message)/4)
+			} else {
+				log.Warnf("Failed to record tokens for type %T", m)
+			}
+		}
 		return resp, nil
 	}
 
@@ -94,6 +106,7 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		defer originalBody.Close()
 		defer pw.Close()
 
+		tokens := 0
 		scanner := bufio.NewScanner(originalBody)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -113,10 +126,7 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 					}
 				}
 
-				if chunkTokens > 0 && t.tokenRecorder != nil {
-					apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
-					t.tokenRecorder.Record(apiKey, stream.Model, chunkTokens)
-				}
+				tokens += chunkTokens
 
 				// Add padding to first choice if available
 				if len(stream.Choices) > 0 {
@@ -141,6 +151,10 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			} else {
 				pw.Write([]byte(line + "\n"))
 			}
+		}
+
+		if tokens > 0 && t.tokenRecorder != nil {
+			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
 		}
 	}()
 

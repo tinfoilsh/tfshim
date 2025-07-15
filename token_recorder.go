@@ -72,14 +72,13 @@ func (r *TokenRecorder) Stop() {
 }
 
 func (r *TokenRecorder) account(m tokenRequest) {
-	log.Debugf("Accounting for %d tokens for %s", m.Tokens, m.Model)
 	body, err := json.Marshal(m)
 	if err != nil {
 		log.Warnf("Failed to marshal response: %v", err)
 		return
 	}
 
-	log.Debugf("Sending %d tokens to %s", m.Tokens, r.shimCollectURL)
+	log.Debugf("Sending %d %s tokens to %s", m.Tokens, m.Model, r.shimCollectURL)
 	resp, err := http.Post(r.shimCollectURL, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		log.Warnf("Failed to post response: %v", err)
