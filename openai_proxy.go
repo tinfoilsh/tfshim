@@ -25,6 +25,14 @@ type streamingResponse struct {
 	} `json:"choices"`
 }
 
+type chatResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+}
+
 type chatRequest struct {
 	Model    string `json:"model"`
 	Stream   bool   `json:"stream"`
@@ -69,27 +77,48 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
+	apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+
+	// Record input tokens
+	if t.tokenRecorder != nil {
+		m := cr.Messages[len(cr.Messages)-1].Content
+		message, ok := m.(string)
+		if ok {
+			tokens := len(message) / 4
+			log.Debugf("Recording %d input tokens", tokens)
+			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
+		} else {
+			log.Warnf("Failed to record input tokens for type %T", m)
+		}
+	}
+
 	// Make the actual request
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
 		return nil, err
 	}
 
-	apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+	if !cr.Stream {
+		log.Debugf("Not streaming")
+		var buf bytes.Buffer
+		tee := io.TeeReader(resp.Body, &buf)
 
-	if !cr.Stream || resp.Header.Get("Content-Type") != "text/event-stream" {
-		log.Debugf("Not streaming %v Content-Type: %v", req.URL.Path, resp.Header.Get("Content-Type"))
-
-		if t.tokenRecorder != nil {
-			m := cr.Messages[len(cr.Messages)-1].Content
-			message, ok := m.(string)
-			if ok {
-				t.tokenRecorder.Record(apiKey, cr.Model, len(message)/4)
-			} else {
-				log.Warnf("Failed to record tokens for type %T", m)
-			}
+		var chatResp chatResponse
+		if err := json.NewDecoder(tee).Decode(&chatResp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
 		}
+		resp.Body = io.NopCloser(&buf)
+
+		if len(chatResp.Choices) > 0 && t.tokenRecorder != nil {
+			message := chatResp.Choices[0].Message.Content
+			tokens := len(message) / 4
+			log.Debugf("Recording %d output tokens", tokens)
+			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
+		}
+
 		return resp, nil
+	} else {
+		log.Debug("Starting stream")
 	}
 
 	// SSE headers
