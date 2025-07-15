@@ -1,5 +1,13 @@
+listen-port: 8443
 upstream-port: 11434
-tls-mode: staging
-tls-challenge: dns
+control-plane: https://api.tinfoil.sh
+tls-mode: self-signed
 cache-dir: /tmp/certs
 dummy-attestation: true
+paths:
+- /v1/chat/completions
+- /metrics
+origins:
+- https://tinfoil.sh
+- https://chat.tinfoil.sh
+verbose: true
