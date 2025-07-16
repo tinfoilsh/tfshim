@@ -81,16 +81,17 @@ type streamTransport struct {
 }
 
 func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Check if this is a streaming request
+	if req.URL.Path != "/v1/chat/completions" {
+		return t.base.RoundTrip(req)
+	}
+
 	var cr chatRequest
-	if req.URL.Path == "/v1/chat/completions" {
-		if body, err := io.ReadAll(req.Body); err == nil {
-			if err := json.Unmarshal(body, &cr); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal request body: %w", err)
-			}
-			// Restore the body
-			req.Body = io.NopCloser(bytes.NewReader(body))
+	if body, err := io.ReadAll(req.Body); err == nil {
+		if err := json.Unmarshal(body, &cr); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal request body: %w", err)
 		}
+		// Restore the body
+		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
 	apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
