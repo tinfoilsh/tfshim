@@ -14,10 +14,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
 type streamingResponse struct {
-	Model   string `json:"model"`
+	Model  string `json:"model"`
+	Object string `json:"object"`
+	Usage  *usage `json:"usage,omitempty"`
+
 	Choices []struct {
-		Delta struct {
+		Index        int    `json:"index"`
+		FinishReason string `json:"finish_reason"`
+		Delta        struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 			Padding string `json:"p"`
@@ -26,10 +37,15 @@ type streamingResponse struct {
 }
 
 type chatResponse struct {
+	Model   string `json:"model"`
+	Usage   *usage `json:"usage,omitempty"`
 	Choices []struct {
+		Index   int `json:"index"`
 		Message struct {
+			Role    string `json:"role"`
 			Content string `json:"content"`
 		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 }
 
@@ -98,7 +114,7 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	if !cr.Stream {
-		log.Debugf("Not streaming")
+		log.Debug("Not streaming")
 		var buf bytes.Buffer
 		tee := io.TeeReader(resp.Body, &buf)
 
