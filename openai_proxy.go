@@ -21,9 +21,11 @@ type usage struct {
 }
 
 type streamingResponse struct {
-	Model  string `json:"model"`
-	Object string `json:"object"`
-	Usage  *usage `json:"usage,omitempty"`
+	ID      string `json:"id"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	Object  string `json:"object"`
+	Usage   *usage `json:"usage,omitempty"`
 
 	Choices []struct {
 		Index        int    `json:"index"`
@@ -37,6 +39,8 @@ type streamingResponse struct {
 }
 
 type chatResponse struct {
+	ID      string `json:"id"`
+	Created int64  `json:"created"`
 	Model   string `json:"model"`
 	Usage   *usage `json:"usage,omitempty"`
 	Choices []struct {
