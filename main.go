@@ -207,17 +207,10 @@ func main() {
 		rateLimiter = NewRateLimiter(rate.Limit(config.RateLimit), config.RateBurst)
 	}
 
-	var tokenRecorder *TokenRecorder
-	if controlPlaneURL != nil {
-		log.Printf("Starting token recorder")
-		tokenRecorder = NewTokenRecorder(controlPlaneURL.JoinPath("api", "shim", "collect").String())
-		tokenRecorder.Start()
-	}
-
 	listenAddr := fmt.Sprintf(":%d", config.ListenPort)
 	httpServer := &http.Server{
 		Addr:      listenAddr,
-		Handler:   newMux(validator, rateLimiter, tokenRecorder, att),
+		Handler:   newMux(validator, rateLimiter, att),
 		TLSConfig: tlsConfig,
 	}
 
