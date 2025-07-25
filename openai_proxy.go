@@ -38,21 +38,6 @@ type streamingResponse struct {
 	} `json:"choices"`
 }
 
-type chatResponse struct {
-	ID      string `json:"id"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Usage   *usage `json:"usage,omitempty"`
-	Choices []struct {
-		Index   int `json:"index"`
-		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-}
-
 type chatRequest struct {
 	Model    string `json:"model"`
 	Stream   bool   `json:"stream"`
@@ -62,26 +47,8 @@ type chatRequest struct {
 	} `json:"messages"`
 }
 
-func tokenizeAudioResponse(resp *http.Response) (int, error) {
-	reqBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read request body: %w", err)
-	}
-	resp.Body.Close()
-	resp.Body = io.NopCloser(bytes.NewReader(reqBody))
-
-	var body struct {
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(reqBody, &body); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal request body: %w", err)
-	}
-	return len(body.Text) / 4, nil
-}
-
 type streamTransport struct {
-	tokenRecorder *TokenRecorder
-	base          http.RoundTripper
+	base http.RoundTripper
 }
 
 func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -98,20 +65,6 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
-	apiKey := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
-
-	tokens := 0
-
-	// Record input tokens
-	m := cr.Messages[len(cr.Messages)-1].Content
-	message, ok := m.(string)
-	if ok {
-		tokens = len(message) / 4
-		log.Debugf("Recording %d input tokens", tokens)
-	} else {
-		log.Warnf("Failed to parse input for tokens for type %T", m)
-	}
-
 	// Make the actual request
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
@@ -120,25 +73,6 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	if !cr.Stream {
 		log.Debug("Not streaming")
-		var buf bytes.Buffer
-		tee := io.TeeReader(resp.Body, &buf)
-
-		var chatResp chatResponse
-		if err := json.NewDecoder(tee).Decode(&chatResp); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
-		}
-		resp.Body = io.NopCloser(&buf)
-
-		if len(chatResp.Choices) > 0 && t.tokenRecorder != nil {
-			message := chatResp.Choices[0].Message.Content
-			tokens += len(message) / 4
-			log.Debugf("Recording %d output tokens", tokens)
-		}
-
-		if tokens > 0 && t.tokenRecorder != nil {
-			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
-		}
-
 		return resp, nil
 	} else {
 		log.Debug("Starting stream")
@@ -169,16 +103,6 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 					continue
 				}
 
-				// Count tokens from this chunk
-				chunkTokens := 0
-				for _, choice := range stream.Choices {
-					if choice.Delta.Content != "" {
-						chunkTokens += max(len(choice.Delta.Content)/4, 1)
-					}
-				}
-
-				tokens += chunkTokens
-
 				// Add padding to first choice if available
 				if len(stream.Choices) > 0 {
 					const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -204,9 +128,6 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 		}
 
-		if tokens > 0 && t.tokenRecorder != nil {
-			t.tokenRecorder.Record(apiKey, cr.Model, tokens)
-		}
 	}()
 
 	return resp, nil
