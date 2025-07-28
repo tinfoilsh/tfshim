@@ -14,28 +14,52 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+// addPaddingToStreamChunk adds a random padding field to the delta object in a streaming chunk
+// without parsing the entire response structure
+func addPaddingToStreamChunk(data string) (string, error) {
+	var rawJSON map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &rawJSON); err != nil {
+		return data, err
+	}
 
-type streamingResponse struct {
-	ID      string `json:"id"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Object  string `json:"object"`
-	Usage   *usage `json:"usage,omitempty"`
+	// Check if this chunk has choices with delta
+	choices, ok := rawJSON["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return data, nil
+	}
 
-	Choices []struct {
-		Index        int    `json:"index"`
-		FinishReason string `json:"finish_reason"`
-		Delta        struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-			Padding string `json:"p"`
-		} `json:"delta"`
-	} `json:"choices"`
+	// Get the first choice
+	firstChoice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return data, nil
+	}
+
+	// Get the delta object
+	delta, ok := firstChoice["delta"].(map[string]interface{})
+	if !ok {
+		return data, nil
+	}
+
+	// Generate random padding
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	minLength := 4
+	maxLength := len(charset)
+	r, err := rand.Int(rand.Reader, big.NewInt(int64(maxLength-minLength+1)))
+	if err != nil {
+		return data, err
+	}
+	padding := charset[:minLength+int(r.Int64())]
+
+	// Add padding field to delta
+	delta["p"] = padding
+
+	// Marshal back to JSON
+	modified, err := json.Marshal(rawJSON)
+	if err != nil {
+		return data, err
+	}
+
+	return string(modified), nil
 }
 
 type chatRequest struct {
@@ -96,33 +120,14 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
-				var stream streamingResponse
 				data := strings.TrimPrefix(line, "data: ")
-				if err := json.Unmarshal([]byte(data), &stream); err != nil {
-					pw.Write([]byte(line + "\n"))
-					continue
-				}
-
-				// Add padding to first choice if available
-				if len(stream.Choices) > 0 {
-					const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-					minLength := 4
-					maxLength := len(charset)
-					r, err := rand.Int(rand.Reader, big.NewInt(int64(maxLength-minLength+1)))
-					if err != nil {
-						log.Warnf("Failed to generate random padding: %v", err)
-						continue
-					}
-					stream.Choices[0].Delta.Padding = charset[:minLength+int(r.Int64())]
-				}
-
-				// Write modified data
-				modifiedData, err := json.Marshal(stream)
+				modifiedData, err := addPaddingToStreamChunk(data)
 				if err != nil {
+					log.Warnf("Failed to add padding to chunk: %v", err)
 					pw.Write([]byte(line + "\n"))
 					continue
 				}
-				pw.Write([]byte("data: " + string(modifiedData) + "\n"))
+				pw.Write([]byte("data: " + modifiedData + "\n"))
 			} else {
 				pw.Write([]byte(line + "\n"))
 			}
