@@ -14,7 +14,9 @@ import (
 
 	"github.com/creasty/defaults"
 	"github.com/go-acme/lego/v4/lego"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
+	"github.com/tinfoilsh/stransport/identity"
 	"github.com/tinfoilsh/verifier/attestation"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
@@ -40,10 +42,11 @@ var config struct {
 
 	ControlPlane string `yaml:"control-plane"`
 
-	RateLimit float64 `yaml:"rate-limit"`
-	RateBurst int     `yaml:"rate-burst"`
-	CacheDir  string  `yaml:"cache-dir" default:"/mnt/ramdisk/certs"`
-	Email     string  `yaml:"email" default:"tls@tinfoil.sh"`
+	RateLimit   float64 `yaml:"rate-limit"`
+	RateBurst   int     `yaml:"rate-burst"`
+	CacheDir    string  `yaml:"cache-dir" default:"/mnt/ramdisk/certs"`
+	Email       string  `yaml:"email" default:"tls@tinfoil.sh"`
+	HPKEKeyFile string  `yaml:"hpke-key-file" default:"/mnt/ramdisk/hpke_key.json"`
 
 	PublishAttestation bool `yaml:"publish-attestation"`
 	DummyAttestation   bool `yaml:"dummy-attestation"`
@@ -99,7 +102,7 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	log.Printf("Starting SEV-SNP attestation shim %s: %+v", version, config)
+	log.Printf("Starting tinfoil attestation shim %s: %+v", version, config)
 
 	var validator key.Validator
 	var controlPlaneURL *url.URL
@@ -123,6 +126,12 @@ func main() {
 	controlServer := newControlServer()
 	go controlServer.Start(config.ControlPort)
 
+	// Generate or load HPKE key
+	serverIdentity, err := identity.FromFile(config.HPKEKeyFile)
+	if err != nil {
+		logrus.Fatalf("Failed to get identity: %v", err)
+	}
+
 	// Generate key for TLS certificate
 	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
@@ -133,18 +142,29 @@ func main() {
 		externalConfig.Domain = "localhost"
 	}
 
-	// Request SEV-SNP attestation
-	keyFP := tlsutil.KeyFP(privateKey.Public().(*ecdsa.PublicKey))
-	log.Printf("Fetching attestation over %s", keyFP)
+	tlsKeyFP := tlsutil.KeyFP(privateKey.Public().(*ecdsa.PublicKey))
+	hpkePublicKey := fmt.Sprintf("%x", serverIdentity.MarshalPublicKey())
+
+	aBody := AttestationBodyV2{
+		TLSKeyFP: tlsKeyFP,
+		HPKEKey:  hpkePublicKey,
+	}
+	attestationBody, err := aBody.Marshal()
+	if err != nil {
+		log.Fatalf("Failed to marshal attestation body: %v", err)
+	}
+
+	// Request attestation
+	log.Printf("Fetching attestation over %s", attestationBody)
 	var att *attestation.Document
 	if externalConfig.Domain == "localhost" || *dev || config.DummyAttestation {
 		log.Warn("Using dummy attestation report")
 		att = &attestation.Document{
-			Format: "https://tinfoil.sh/predicate/dummy/v1",
-			Body:   keyFP,
+			Format: "https://tinfoil.sh/predicate/dummy/v2",
+			Body:   string(attestationBody),
 		}
 	} else {
-		att, err = attestationReport(keyFP)
+		att, err = attestationReport(attestationBody)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -210,7 +230,7 @@ func main() {
 	listenAddr := fmt.Sprintf(":%d", config.ListenPort)
 	httpServer := &http.Server{
 		Addr:      listenAddr,
-		Handler:   newMux(validator, rateLimiter, att),
+		Handler:   newMux(validator, rateLimiter, att, serverIdentity),
 		TLSConfig: tlsConfig,
 	}
 

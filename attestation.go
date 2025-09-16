@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
 	sevabi "github.com/google/go-sev-guest/abi"
@@ -12,10 +13,23 @@ import (
 	"github.com/tinfoilsh/verifier/attestation"
 )
 
+type AttestationBodyV2 struct {
+	TLSKeyFP string `json:"tls_key_fp"`
+	HPKEKey  string `json:"hpke_key"`
+}
+
+func (a AttestationBodyV2) Marshal() (string, error) {
+	b, err := json.Marshal(a)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // sevAttestationReport gets a SEV-SNP signed attestation report over a TLS certificate fingerprint
-func sevAttestationReport(certFP string) (*attestation.Document, error) {
+func sevAttestationReport(body string) (*attestation.Document, error) {
 	var userData [64]byte
-	copy(userData[:], certFP)
+	copy(userData[:], body)
 
 	qp, err := sevclient.GetQuoteProvider()
 	if err != nil {
@@ -31,15 +45,15 @@ func sevAttestationReport(certFP string) (*attestation.Document, error) {
 	}
 
 	return &attestation.Document{
-		Format: attestation.SevGuestV1,
+		Format: attestation.SevGuestV2,
 		Body:   base64.StdEncoding.EncodeToString(report),
 	}, nil
 }
 
 // tdxAttestationReport gets a TDX signed attestation report over a TLS certificate fingerprint
-func tdxAttestationReport(certFP string) (*attestation.Document, error) {
+func tdxAttestationReport(body string) (*attestation.Document, error) {
 	var userData [64]byte
-	copy(userData[:], certFP)
+	copy(userData[:], body)
 
 	qp, err := tdxclient.GetQuoteProvider()
 	if err != nil {
@@ -56,18 +70,18 @@ func tdxAttestationReport(certFP string) (*attestation.Document, error) {
 	}
 
 	return &attestation.Document{
-		Format: "https://tinfoil.sh/predicate/tdx-guest/v1",
+		Format: attestation.TdxGuestV2,
 		Body:   base64.StdEncoding.EncodeToString(report),
 	}, nil
 }
 
-func attestationReport(certFP string) (*attestation.Document, error) {
+func attestationReport(body string) (*attestation.Document, error) {
 	if cpuid.CPU.IsVendor(cpuid.AMD) {
 		log.Info("Requesting AMD SEV-SNP quote")
-		return sevAttestationReport(certFP)
+		return sevAttestationReport(body)
 	} else if cpuid.CPU.IsVendor(cpuid.Intel) {
 		log.Info("Requesting Intel TDX quote")
-		return tdxAttestationReport(certFP)
+		return tdxAttestationReport(body)
 	} else {
 		return nil, fmt.Errorf("attestation report for vendor %s not supported", cpuid.CPU.VendorString)
 	}

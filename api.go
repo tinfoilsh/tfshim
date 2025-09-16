@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/tinfoilsh/stransport/identity"
+	ehbpProtocol "github.com/tinfoilsh/stransport/protocol"
 	"github.com/tinfoilsh/tfshim/key"
 	"github.com/tinfoilsh/verifier/attestation"
 )
@@ -51,7 +53,9 @@ func newMux(
 	validator key.Validator,
 	rateLimiter *RateLimiter,
 	att *attestation.Document,
+	ehbpIdentity *identity.Identity,
 ) http.Handler {
+	ehbpMiddleware := ehbpIdentity.Middleware(false)
 	mux := http.NewServeMux()
 
 	proxy := httputil.ReverseProxy{
@@ -71,7 +75,7 @@ func newMux(
 		},
 	}
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cors(w, r)
 		if r.Method == "OPTIONS" {
 			return
@@ -109,14 +113,16 @@ func newMux(
 		}
 
 		proxy.ServeHTTP(w, r)
-	})
+	})))
 
-	mux.HandleFunc("/.well-known/tinfoil-attestation", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/.well-known/tinfoil-attestation", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cors(w, r)
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(att)
-	})
+	})))
+
+	mux.HandleFunc(ehbpProtocol.KeysPath, ehbpIdentity.ConfigHandler)
 
 	return mux
 }

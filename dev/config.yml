@@ -1,13 +1,11 @@
 listen-port: 8443
 upstream-port: 11434
 control-plane: https://api.tinfoil.sh
+hpke-key-file: /tmp/hpke_key.json
 tls-mode: self-signed
 cache-dir: /tmp/certs
 dummy-attestation: true
 paths:
 - /v1/chat/completions
 - /metrics
-origins:
-- https://tinfoil.sh
-- https://chat.tinfoil.sh
 verbose: true
