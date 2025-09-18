@@ -15,38 +15,41 @@ import (
 	"github.com/tinfoilsh/verifier/attestation"
 )
 
-func cors(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return // same‑origin request
-	}
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			// Allow only configured origins
+			if len(config.OriginDomains) > 0 && !slices.Contains(config.OriginDomains, origin) {
+				log.Debugf("CORS origin not allowed: %s", origin)
+				http.Error(w, "shim: 403 CORS origin not allowed", http.StatusForbidden)
+				return
+			}
 
-	// Allow only configured origins
-	if len(config.OriginDomains) > 0 && !slices.Contains(config.OriginDomains, origin) {
-		log.Debugf("CORS origin not allowed: %s", origin)
-		http.Error(w, "shim: 403 CORS origin not allowed", http.StatusForbidden)
-		return
-	}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin") // cache
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+			w.Header().Set("Access-Control-Expose-Headers", "Ehbp-Encapsulated-Key, Content-Type")
 
-	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Vary", "Origin") // cache
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+			// Echo requested headers or use a safe default
+			reqHdr := r.Header.Get("Access-Control-Request-Headers")
+			if reqHdr == "" {
+				reqHdr = "Authorization, Content-Type, Ehbp-Client-Public-Key, Ehbp-Encapsulated-Key"
+			}
+			w.Header().Set("Access-Control-Allow-Headers", reqHdr)
 
-	// Echo requested headers or use a safe default
-	reqHdr := r.Header.Get("Access-Control-Request-Headers")
-	if reqHdr == "" {
-		reqHdr = "Authorization,Content-Type"
-	}
-	w.Header().Set("Access-Control-Allow-Headers", reqHdr)
+			if r.Method == http.MethodOptions {
+				log.Debugf("CORS OPTIONS request: %s", origin)
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 
-	if r.Method == http.MethodOptions {
-		log.Debugf("CORS OPTIONS request: %s", origin)
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
+			log.Tracef("CORS request allowed: %s", origin)
+		}
 
-	log.Tracef("CORS request allowed: %s", origin)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func newMux(
@@ -76,11 +79,6 @@ func newMux(
 	}
 
 	mux.Handle("/", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cors(w, r)
-		if r.Method == "OPTIONS" {
-			return
-		}
-
 		apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if validator != nil && r.URL.Path == "/v1/chat/completions" {
 			if len(apiKey) == 0 {
@@ -116,7 +114,6 @@ func newMux(
 	})))
 
 	mux.Handle("/.well-known/tinfoil-attestation", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cors(w, r)
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(att)
@@ -124,5 +121,5 @@ func newMux(
 
 	mux.HandleFunc(ehbpProtocol.KeysPath, ehbpIdentity.ConfigHandler)
 
-	return mux
+	return corsMiddleware(mux)
 }
