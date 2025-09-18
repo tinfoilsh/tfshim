@@ -95,8 +95,8 @@ github.com/theupdateframework/go-tuf/v2 v2.1.1 h1:OWcoHItwsGO+7m0wLa7FDWPR4oB1cj
 github.com/theupdateframework/go-tuf/v2 v2.1.1/go.mod h1:V675cQGhZONR0OGQ8r1feO0uwtsTBYPDWHzAAPn5rjE=
 github.com/tinfoilsh/go-sev-guest v0.0.0-20250704193550-c725e6216008 h1:utg5iGJKOGTefc5gWxH2+XaXpra8R1utGA3x1WO61AY=
 github.com/tinfoilsh/go-sev-guest v0.0.0-20250704193550-c725e6216008/go.mod h1:SK9vW+uyfuzYdVN0m8BShL3OQCtXZe/JPF7ZkpD3760=
-github.com/tinfoilsh/stransport v0.0.0-20250916192141-80a1e784a1ac h1:IANhmWAtKwPVtDAF9BFkPH+5yxrX5TuNyKF7aK63LEs=
-github.com/tinfoilsh/stransport v0.0.0-20250916192141-80a1e784a1ac/go.mod h1:L3Sp7qZ/WEZ5KhqScPDG+7ak/vRuoljQPJ0PbZwJHM0=
+github.com/tinfoilsh/stransport v0.0.0-20250918191641-357d27da6b0b h1:5EiucCNmUPQ33wWzo2K3zyy2Nv4FNR/ohzBavYqxT9E=
+github.com/tinfoilsh/stransport v0.0.0-20250918191641-357d27da6b0b/go.mod h1:L3Sp7qZ/WEZ5KhqScPDG+7ak/vRuoljQPJ0PbZwJHM0=
 github.com/tinfoilsh/verifier v0.1.18 h1:PymExtv23p4GTmTB/cUVJ2arHcwcAIA8AI1Ze4wOA5A=
 github.com/tinfoilsh/verifier v0.1.18/go.mod h1:gmzYC6vWDYBJ6pJX3lXTaTUfDn+fUN9ZlHb3Kbx6Bi8=
 github.com/titanous/rocacheck v0.0.0-20171023193734-afe73141d399 h1:e/5i7d4oYZ+C1wj2THlRK+oAhjeS/TRQwMfkIuet3w0=

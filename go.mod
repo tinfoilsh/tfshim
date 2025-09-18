@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.10
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
-	github.com/tinfoilsh/stransport v0.0.0-20250916192141-80a1e784a1ac
+	github.com/tinfoilsh/stransport v0.0.0-20250918191641-357d27da6b0b
 	github.com/tinfoilsh/verifier v0.1.18
 	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
