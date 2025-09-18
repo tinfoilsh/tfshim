@@ -81,6 +81,15 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	var cr chatRequest
+
+	if req.Body == nil {
+		resp := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(bytes.NewReader([]byte("chat completions request body is empty"))),
+		}
+		return resp, nil
+	}
+
 	if body, err := io.ReadAll(req.Body); err == nil {
 		if err := json.Unmarshal(body, &cr); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal request body: %w", err)

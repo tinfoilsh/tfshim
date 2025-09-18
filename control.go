@@ -23,13 +23,11 @@ func (s *ControlServer) Start(listenPort int) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		cors(w, r)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("tinfoil shim"))
 	})
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		cors(w, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
@@ -39,5 +37,5 @@ func (s *ControlServer) Start(listenPort int) {
 		})
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", listenPort), mux))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", listenPort), corsMiddleware(mux)))
 }
