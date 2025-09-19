@@ -142,17 +142,18 @@ func main() {
 		externalConfig.Domain = "localhost"
 	}
 
-	tlsKeyFP := tlsutil.KeyFP(privateKey.Public().(*ecdsa.PublicKey))
-	hpkePublicKey := fmt.Sprintf("%x", serverIdentity.MarshalPublicKey())
+	hpkeKeyBytes := serverIdentity.MarshalPublicKey()
+	if len(hpkeKeyBytes) != 32 {
+		log.Fatalf("HPKE key length is not 32 bytes, got %d", len(hpkeKeyBytes))
+	}
+	var hpkeKey [32]byte
+	copy(hpkeKey[:], hpkeKeyBytes)
 
 	aBody := AttestationBodyV2{
-		TLSKeyFP: tlsKeyFP,
-		HPKEKey:  hpkePublicKey,
+		TLSKeyFP: tlsutil.KeyFPBytes(privateKey.Public().(*ecdsa.PublicKey)),
+		HPKEKey:  hpkeKey,
 	}
-	attestationBody, err := aBody.Marshal()
-	if err != nil {
-		log.Fatalf("Failed to marshal attestation body: %v", err)
-	}
+	attestationBody := aBody.Marshal()
 
 	// Request attestation
 	log.Printf("Fetching attestation over %s", attestationBody)

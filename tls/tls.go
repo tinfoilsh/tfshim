@@ -7,9 +7,13 @@ import (
 	"encoding/hex"
 )
 
+func KeyFPBytes(publicKey *ecdsa.PublicKey) [32]byte {
+	bytes, _ := x509.MarshalPKIXPublicKey(publicKey)
+	return sha256.Sum256(bytes)
+}
+
 // KeyFP returns the fingerprint of a given ECDSA public key
 func KeyFP(publicKey *ecdsa.PublicKey) string {
-	bytes, _ := x509.MarshalPKIXPublicKey(publicKey)
-	hash := sha256.Sum256(bytes)
-	return hex.EncodeToString(hash[:])
+	fp := KeyFPBytes(publicKey)
+	return hex.EncodeToString(fp[:])
 }

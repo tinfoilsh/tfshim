@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 
 	sevabi "github.com/google/go-sev-guest/abi"
@@ -14,16 +14,12 @@ import (
 )
 
 type AttestationBodyV2 struct {
-	TLSKeyFP string `json:"tls_key_fp"`
-	HPKEKey  string `json:"hpke_key"`
+	TLSKeyFP [32]byte
+	HPKEKey  [32]byte
 }
 
-func (a AttestationBodyV2) Marshal() (string, error) {
-	b, err := json.Marshal(a)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
+func (a AttestationBodyV2) Marshal() string {
+	return hex.EncodeToString(append(a.TLSKeyFP[:], a.HPKEKey[:]...))
 }
 
 // sevAttestationReport gets a SEV-SNP signed attestation report over a TLS certificate fingerprint
