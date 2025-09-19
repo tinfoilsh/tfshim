@@ -58,7 +58,7 @@ func newMux(
 	att *attestation.Document,
 	ehbpIdentity *identity.Identity,
 ) http.Handler {
-	ehbpMiddleware := ehbpIdentity.Middleware(false)
+	ehbpMiddleware := ehbpIdentity.Middleware(true)
 	mux := http.NewServeMux()
 
 	proxy := httputil.ReverseProxy{
