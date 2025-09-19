@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"net/http"
@@ -153,16 +154,20 @@ func main() {
 		TLSKeyFP: tlsutil.KeyFPBytes(privateKey.Public().(*ecdsa.PublicKey)),
 		HPKEKey:  hpkeKey,
 	}
+	log.WithFields(logrus.Fields{
+		"tls_key_fp": fmt.Sprintf("%x", aBody.TLSKeyFP),
+		"hpke_key":   fmt.Sprintf("%x", aBody.HPKEKey),
+	}).Info("Attested keys")
 	attestationBody := aBody.Marshal()
 
 	// Request attestation
-	log.Printf("Fetching attestation over %s", attestationBody)
+	log.Printf("Fetching attestation over %x", attestationBody)
 	var att *attestation.Document
 	if externalConfig.Domain == "localhost" || *dev || config.DummyAttestation {
 		log.Warn("Using dummy attestation report")
 		att = &attestation.Document{
 			Format: "https://tinfoil.sh/predicate/dummy/v2",
-			Body:   string(attestationBody),
+			Body:   hex.EncodeToString(attestationBody[:]),
 		}
 	} else {
 		att, err = attestationReport(attestationBody)
