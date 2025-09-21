@@ -3,6 +3,7 @@ module github.com/tinfoilsh/tfshim
 go 1.25.0
 
 require (
+	github.com/NVIDIA/go-nvml v0.13.0-1
 	github.com/creasty/defaults v1.8.0
 	github.com/go-acme/lego/v4 v4.23.1
 	github.com/google/go-sev-guest v0.12.1
@@ -32,6 +33,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/letsencrypt/boulder v0.20250902.0 // indirect
+	github.com/mackerelio/go-osstat v0.2.6 // indirect
 	github.com/miekg/dns v1.1.64 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
