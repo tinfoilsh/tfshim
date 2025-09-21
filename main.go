@@ -61,6 +61,7 @@ var externalConfig struct {
 	CloudflareZoneToken string `yaml:"cloudflare-zone-token"`
 	MetricsAPIKey       string `yaml:"metrics-api-key"`
 	Metadata            struct {
+		ID     string `yaml:"id"`
 		Domain string `yaml:"domain"`
 		Image  string `yaml:"image"`
 		CPU    string `yaml:"cpu"`
