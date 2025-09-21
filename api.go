@@ -56,6 +56,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 type Metrics struct {
+	ID          string `json:"id"`
 	Domain      string `json:"domain"`
 	Image       string `json:"image"`
 	CPUUtil     int    `json:"cpu_util"`
@@ -125,6 +126,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metrics := Metrics{
+		ID:      externalConfig.Metadata.ID,
 		Domain:  externalConfig.Metadata.Domain,
 		Image:   externalConfig.Metadata.Image,
 		CPUType: externalConfig.Metadata.CPU,
