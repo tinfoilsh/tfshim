@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -15,6 +16,7 @@ import (
 	"github.com/tinfoilsh/stransport/identity"
 	ehbpProtocol "github.com/tinfoilsh/stransport/protocol"
 	"github.com/tinfoilsh/tfshim/key"
+	"github.com/tinfoilsh/tfshim/key/online"
 	"github.com/tinfoilsh/verifier/attestation"
 )
 
@@ -204,7 +206,12 @@ func newMux(
 
 			if err := validator.Validate(apiKey); err != nil {
 				log.Warnf("Failed to validate API key: %v", err)
-				http.Error(w, "shim: 401 invalid API key", http.StatusUnauthorized)
+				var validationErr *online.ValidationError
+				if errors.As(err, &validationErr) {
+					http.Error(w, validationErr.Message, validationErr.StatusCode)
+				} else {
+					http.Error(w, "shim: 500 validation error", http.StatusInternalServerError)
+				}
 				return
 			}
 		}
