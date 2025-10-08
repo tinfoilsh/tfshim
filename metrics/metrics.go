@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/klauspost/cpuid/v2"
 	"github.com/mackerelio/go-osstat/cpu"
 	"github.com/mackerelio/go-osstat/memory"
 
@@ -42,7 +43,7 @@ func gpuMetrics() (int, int, int, error) {
 	if ret != nvml.SUCCESS {
 		return 0, 0, 0, fmt.Errorf("Unable to get device count: %v", nvml.ErrorString(ret))
 	}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		device, ret := nvml.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
 			return 0, 0, 0, fmt.Errorf("Unable to get device at index %d: %v", i, nvml.ErrorString(ret))
@@ -79,7 +80,7 @@ func collectMetrics(metadata *config.Metadata) (*Metrics, error) {
 		ID:      metadata.ID,
 		Domain:  metadata.Domain,
 		Image:   metadata.Image,
-		CPUType: metadata.CPU,
+		CPUType: cpuid.CPU.VendorString,
 	}
 
 	memory, err := memory.Get()

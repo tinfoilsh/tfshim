@@ -38,7 +38,6 @@ type Metadata struct {
 	ID     string `yaml:"id"`
 	Domain string `yaml:"domain"`
 	Image  string `yaml:"image"`
-	CPU    string `yaml:"cpu"`
 	GPU    string `yaml:"gpu"`
 }
 
