@@ -10,6 +10,7 @@ import (
 	"github.com/klauspost/cpuid/v2"
 	"github.com/mackerelio/go-osstat/cpu"
 	"github.com/mackerelio/go-osstat/memory"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/tinfoilsh/tfshim/config"
 )
@@ -26,32 +27,38 @@ type Metrics struct {
 	CPUMemTotal int    `json:"cpu_mem_total"`
 	GPUMemTotal int    `json:"gpu_mem_total,omitempty"`
 	CPUType     string `json:"cpu_type"`
-	GPUType     string `json:"gpu_type,omitempty"`
+	GPUType     string `json:"gpu_type"`
 }
 
 // gpuMetrics collects GPU utilization and memory metrics
-func gpuMetrics() (int, int, int, error) {
+func gpuMetrics() (string, int, int, int, error) {
 	ret := nvml.Init()
 	if ret != nvml.SUCCESS {
-		return 0, 0, 0, fmt.Errorf("Unable to initialize NVML: %v", nvml.ErrorString(ret))
+		return "", 0, 0, 0, fmt.Errorf("Unable to initialize NVML: %v", nvml.ErrorString(ret))
 	}
 	defer nvml.Shutdown()
 
+	var gpuType string
 	var totalMem, usedMem, totalUtil int
 
 	count, ret := nvml.DeviceGetCount()
 	if ret != nvml.SUCCESS {
-		return 0, 0, 0, fmt.Errorf("Unable to get device count: %v", nvml.ErrorString(ret))
+		return "", 0, 0, 0, fmt.Errorf("Unable to get device count: %v", nvml.ErrorString(ret))
 	}
 	for i := range count {
 		device, ret := nvml.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
-			return 0, 0, 0, fmt.Errorf("Unable to get device at index %d: %v", i, nvml.ErrorString(ret))
+			return "", 0, 0, 0, fmt.Errorf("Unable to get device at index %d: %v", i, nvml.ErrorString(ret))
+		}
+
+		gpuType, ret = nvml.DeviceGetName(device)
+		if ret != nvml.SUCCESS {
+			return "", 0, 0, 0, fmt.Errorf("Unable to get name for device at index %d: %v", i, nvml.ErrorString(ret))
 		}
 
 		info, ret := nvml.DeviceGetMemoryInfo_v2(device)
 		if ret != nvml.SUCCESS {
-			return 0, 0, 0, fmt.Errorf("Unable to get memory info for device at index %d: %v", i, nvml.ErrorString(ret))
+			return "", 0, 0, 0, fmt.Errorf("Unable to get memory info for device at index %d: %v", i, nvml.ErrorString(ret))
 		}
 		totalMem += int(info.Total / 1024 / 1024 / 1024) // to GB
 		usedMem += int(info.Used / 1024 / 1024 / 1024)
@@ -59,7 +66,7 @@ func gpuMetrics() (int, int, int, error) {
 		// Get GPU utilization rates
 		rates, ret := nvml.DeviceGetUtilizationRates(device)
 		if ret != nvml.SUCCESS {
-			return 0, 0, 0, fmt.Errorf("Unable to get utilization rates for device at index %d: %v", i, nvml.ErrorString(ret))
+			return "", 0, 0, 0, fmt.Errorf("Unable to get utilization rates for device at index %d: %v", i, nvml.ErrorString(ret))
 		} else {
 			totalUtil += int(rates.Gpu)
 		}
@@ -71,7 +78,7 @@ func gpuMetrics() (int, int, int, error) {
 		avgUtil = totalUtil / count
 	}
 
-	return totalMem, usedMem, avgUtil, nil
+	return gpuType, totalMem, usedMem, avgUtil, nil
 }
 
 // collectMetrics gathers system metrics from CPU, memory, and GPU
@@ -99,16 +106,14 @@ func collectMetrics(metadata *config.Metadata) (*Metrics, error) {
 	metrics.CPUUtil = int(float64(busy) / float64(total) * 100)
 
 	// Set GPU metrics if available
-	if metadata.GPU != "" && metadata.GPU != "none" {
-		totalMem, usedMem, gpuUtil, err := gpuMetrics()
-		if err != nil {
-			return nil, err
-		}
-		metrics.GPUMemTotal = totalMem
-		metrics.GPUMemUtil = usedMem
-		metrics.GPUUtil = gpuUtil
-		metrics.GPUType = metadata.GPU
+	gpuType, totalMem, usedMem, gpuUtil, err := gpuMetrics()
+	if err != nil {
+		log.Warnf("failed to get GPU metrics: %v", err)
 	}
+	metrics.GPUMemTotal = totalMem
+	metrics.GPUMemUtil = usedMem
+	metrics.GPUUtil = gpuUtil
+	metrics.GPUType = gpuType
 
 	return &metrics, nil
 }
