@@ -10,18 +10,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"slices"
 
-	"github.com/creasty/defaults"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/tinfoilsh/stransport/identity"
 	"github.com/tinfoilsh/verifier/attestation"
 	"golang.org/x/time/rate"
-	"gopkg.in/yaml.v3"
 
+	"github.com/tinfoilsh/tfshim/config"
 	"github.com/tinfoilsh/tfshim/dcode"
 	"github.com/tinfoilsh/tfshim/key"
 	"github.com/tinfoilsh/tfshim/key/online"
@@ -30,81 +27,19 @@ import (
 
 var version = "dev"
 
-var config struct {
-	ListenPort   int `yaml:"listen-port" default:"443"`
-	UpstreamPort int `yaml:"upstream-port"`
-	ControlPort  int `yaml:"control-port" default:"8086"`
-
-	Paths         []string `yaml:"paths"`
-	OriginDomains []string `yaml:"origins"`
-
-	TLSMode          string `yaml:"tls-mode" default:"production"` // self-signed | staging | production
-	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns
-
-	ControlPlane string `yaml:"control-plane"`
-
-	RateLimit   float64 `yaml:"rate-limit"`
-	RateBurst   int     `yaml:"rate-burst"`
-	CacheDir    string  `yaml:"cache-dir" default:"/mnt/ramdisk/certs"`
-	Email       string  `yaml:"email" default:"tls@tinfoil.sh"`
-	HPKEKeyFile string  `yaml:"hpke-key-file" default:"/mnt/ramdisk/hpke_key.json"`
-
-	PublishAttestation bool `yaml:"publish-attestation"`
-	DummyAttestation   bool `yaml:"dummy-attestation"`
-
-	Verbose bool `yaml:"verbose"`
-}
-
-var externalConfig struct {
-	Domain              string `yaml:"domain"`
-	CloudflareDNSToken  string `yaml:"cloudflare-dns-token"`
-	CloudflareZoneToken string `yaml:"cloudflare-zone-token"`
-	MetricsAPIKey       string `yaml:"metrics-api-key"`
-	Metadata            struct {
-		ID     string `yaml:"id"`
-		Domain string `yaml:"domain"`
-		Image  string `yaml:"image"`
-		CPU    string `yaml:"cpu"`
-		GPU    string `yaml:"gpu"`
-	} `yaml:"metadata"`
-}
-
 var (
 	configFile         = flag.String("c", "/mnt/ramdisk/shim.yml", "Path to config file")
 	externalConfigFile = flag.String("e", "/mnt/ramdisk/external-config.yml", "Path to external config file")
 	dev                = flag.Bool("d", false, "Skip dcode domains, use dummy attestation, and enable verbose logging")
+	httpMode           = flag.Bool("i", false, "Use HTTP instead of HTTPS (insecure)")
 )
 
 func main() {
 	flag.Parse()
 
-	configBytes, err := os.ReadFile(*configFile)
+	config, externalConfig, err := config.Load(*configFile, *externalConfigFile)
 	if err != nil {
-		log.Fatalf("Failed to read config file: %v", err)
-	}
-	if err := yaml.Unmarshal(configBytes, &config); err != nil {
-		log.Fatalf("Failed to unmarshal config: %v", err)
-	}
-	if err := defaults.Set(&config); err != nil {
-		log.Fatalf("Failed to set defaults: %v", err)
-	}
-
-	if config.UpstreamPort == 0 {
-		log.Fatalf("Upstream port is not set")
-	}
-	if !slices.Contains([]string{"self-signed", "staging", "production"}, config.TLSMode) {
-		log.Fatalf("Invalid TLS mode: %s", config.TLSMode)
-	}
-
-	externalConfigBytes, err := os.ReadFile(*externalConfigFile)
-	if err != nil {
-		log.Fatalf("Failed to read external config file: %v", err)
-	}
-	if err := yaml.Unmarshal(externalConfigBytes, &externalConfig); err != nil {
-		log.Fatalf("Failed to unmarshal external config: %v", err)
-	}
-	if err := defaults.Set(&externalConfig); err != nil {
-		log.Fatalf("Failed to set defaults: %v", err)
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	if config.Verbose || *dev {
@@ -130,10 +65,6 @@ func main() {
 		validator = nil
 		log.Warn("API key verification disabled")
 	}
-
-	log.Printf("Starting control server on port %d", config.ControlPort)
-	controlServer := newControlServer()
-	go controlServer.Start(config.ControlPort)
 
 	// Generate or load HPKE key
 	serverIdentity, err := identity.FromFile(config.HPKEKeyFile)
@@ -244,10 +175,15 @@ func main() {
 	listenAddr := fmt.Sprintf(":%d", config.ListenPort)
 	httpServer := &http.Server{
 		Addr:      listenAddr,
-		Handler:   newMux(validator, rateLimiter, att, serverIdentity),
+		Handler:   NewShimServer(validator, rateLimiter, att, serverIdentity, config, externalConfig),
 		TLSConfig: tlsConfig,
 	}
 
 	log.Printf("Listening on %s", listenAddr)
-	log.Fatal(httpServer.ListenAndServeTLS("", ""))
+	if *httpMode {
+		log.Warn("Running in HTTP mode (insecure)")
+		log.Fatal(httpServer.ListenAndServe())
+	} else {
+		log.Fatal(httpServer.ListenAndServeTLS("", ""))
+	}
 }

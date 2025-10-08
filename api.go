@@ -9,18 +9,17 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/NVIDIA/go-nvml/pkg/nvml"
-	"github.com/mackerelio/go-osstat/cpu"
-	"github.com/mackerelio/go-osstat/memory"
 	log "github.com/sirupsen/logrus"
 	"github.com/tinfoilsh/stransport/identity"
 	ehbpProtocol "github.com/tinfoilsh/stransport/protocol"
+	"github.com/tinfoilsh/tfshim/config"
 	"github.com/tinfoilsh/tfshim/key"
 	"github.com/tinfoilsh/tfshim/key/online"
+	"github.com/tinfoilsh/tfshim/metrics"
 	"github.com/tinfoilsh/verifier/attestation"
 )
 
-func corsMiddleware(next http.Handler) http.Handler {
+func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
@@ -57,132 +56,13 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-type Metrics struct {
-	ID          string `json:"id"`
-	Domain      string `json:"domain"`
-	Image       string `json:"image"`
-	CPUUtil     int    `json:"cpu_util"`
-	GPUUtil     int    `json:"gpu_util,omitempty"`
-	CPUMemUtil  int    `json:"cpu_mem_util"`
-	GPUMemUtil  int    `json:"gpu_mem_util,omitempty"`
-	CPUMemTotal int    `json:"cpu_mem_total"`
-	GPUMemTotal int    `json:"gpu_mem_total,omitempty"`
-	CPUType     string `json:"cpu_type"`
-	GPUType     string `json:"gpu_type,omitempty"`
-}
-
-func gpuMetrics() (int, int, int, error) {
-	ret := nvml.Init()
-	if ret != nvml.SUCCESS {
-		return 0, 0, 0, fmt.Errorf("Unable to initialize NVML: %v", nvml.ErrorString(ret))
-	}
-	defer nvml.Shutdown()
-
-	var totalMem, usedMem, totalUtil int
-
-	count, ret := nvml.DeviceGetCount()
-	if ret != nvml.SUCCESS {
-		return 0, 0, 0, fmt.Errorf("Unable to get device count: %v", nvml.ErrorString(ret))
-	}
-	for i := 0; i < count; i++ {
-		device, ret := nvml.DeviceGetHandleByIndex(i)
-		if ret != nvml.SUCCESS {
-			return 0, 0, 0, fmt.Errorf("Unable to get device at index %d: %v", i, nvml.ErrorString(ret))
-		}
-
-		info, ret := nvml.DeviceGetMemoryInfo_v2(device)
-		if ret != nvml.SUCCESS {
-			return 0, 0, 0, fmt.Errorf("Unable to get memory info for device at index %d: %v", i, nvml.ErrorString(ret))
-		}
-		totalMem += int(info.Total / 1024 / 1024 / 1024) // to GB
-		usedMem += int(info.Used / 1024 / 1024 / 1024)
-
-		// Get GPU utilization rates
-		rates, ret := nvml.DeviceGetUtilizationRates(device)
-		if ret != nvml.SUCCESS {
-			return 0, 0, 0, fmt.Errorf("Unable to get utilization rates for device at index %d: %v", i, nvml.ErrorString(ret))
-		} else {
-			totalUtil += int(rates.Gpu)
-		}
-	}
-
-	// Calculate average utilization across all GPUs
-	avgUtil := 0
-	if count > 0 && totalUtil > 0 {
-		avgUtil = totalUtil / count
-	}
-
-	return totalMem, usedMem, avgUtil, nil
-}
-
-func collectMetrics() (*Metrics, error) {
-	metrics := Metrics{
-		ID:      externalConfig.Metadata.ID,
-		Domain:  externalConfig.Metadata.Domain,
-		Image:   externalConfig.Metadata.Image,
-		CPUType: externalConfig.Metadata.CPU,
-	}
-
-	memory, err := memory.Get()
-	if err != nil {
-		return nil, err
-	}
-	metrics.CPUMemTotal = int(memory.Total / 1024 / 1024 / 1024) // to GB
-	metrics.CPUMemUtil = int(memory.Used / 1024 / 1024 / 1024)
-
-	cpuStats, err := cpu.Get()
-	if err != nil {
-		return nil, err
-	}
-	busy := cpuStats.User + cpuStats.System + cpuStats.Nice
-	total := busy + cpuStats.Idle
-	metrics.CPUUtil = int(float64(busy) / float64(total) * 100)
-
-	// Set GPU metrics if available
-	if externalConfig.Metadata.GPU != "" && externalConfig.Metadata.GPU != "none" {
-		totalMem, usedMem, gpuUtil, err := gpuMetrics()
-		if err != nil {
-			return nil, err
-		}
-		metrics.GPUMemTotal = totalMem
-		metrics.GPUMemUtil = usedMem
-		metrics.GPUUtil = gpuUtil
-		metrics.GPUType = externalConfig.Metadata.GPU
-	}
-
-	return &metrics, nil
-}
-
-func handleMetrics(w http.ResponseWriter, r *http.Request) {
-	if externalConfig.MetricsAPIKey != "" {
-		apiKey := strings.TrimPrefix(
-			r.Header.Get("Authorization"),
-			"Bearer ",
-		)
-		if apiKey != externalConfig.MetricsAPIKey {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-	}
-
-	metrics, err := collectMetrics()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(metrics); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func newMux(
+func NewShimServer(
 	validator key.Validator,
 	rateLimiter *RateLimiter,
 	att *attestation.Document,
 	ehbpIdentity *identity.Identity,
+	config *config.Config,
+	externalConfig *config.ExternalConfig,
 ) http.Handler {
 	ehbpMiddleware := ehbpIdentity.Middleware(true)
 	mux := http.NewServeMux()
@@ -250,9 +130,9 @@ func newMux(
 		json.NewEncoder(w).Encode(att)
 	})))
 
-	mux.HandleFunc("/.well-known/tinfoil-metrics", handleMetrics)
-
+	mux.HandleFunc("/.well-known/tinfoil-metrics", metrics.HandleMetrics(externalConfig))
+	mux.HandleFunc("/.well-known/metrics", metrics.HandlePrometheusMetrics(&externalConfig.Metadata, externalConfig.MetricsAPIKey))
 	mux.HandleFunc(ehbpProtocol.KeysPath, ehbpIdentity.ConfigHandler)
 
-	return corsMiddleware(mux)
+	return corsMiddleware(config, mux)
 }
