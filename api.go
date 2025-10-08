@@ -164,6 +164,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 		metrics.GPUType = externalConfig.Metadata.GPU
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(metrics); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
