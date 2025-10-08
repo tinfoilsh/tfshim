@@ -115,6 +115,44 @@ func gpuMetrics() (int, int, int, error) {
 	return totalMem, usedMem, avgUtil, nil
 }
 
+func collectMetrics() (*Metrics, error) {
+	metrics := Metrics{
+		ID:      externalConfig.Metadata.ID,
+		Domain:  externalConfig.Metadata.Domain,
+		Image:   externalConfig.Metadata.Image,
+		CPUType: externalConfig.Metadata.CPU,
+	}
+
+	memory, err := memory.Get()
+	if err != nil {
+		return nil, err
+	}
+	metrics.CPUMemTotal = int(memory.Total / 1024 / 1024 / 1024) // to GB
+	metrics.CPUMemUtil = int(memory.Used / 1024 / 1024 / 1024)
+
+	cpuStats, err := cpu.Get()
+	if err != nil {
+		return nil, err
+	}
+	busy := cpuStats.User + cpuStats.System + cpuStats.Nice
+	total := busy + cpuStats.Idle
+	metrics.CPUUtil = int(float64(busy) / float64(total) * 100)
+
+	// Set GPU metrics if available
+	if externalConfig.Metadata.GPU != "" && externalConfig.Metadata.GPU != "none" {
+		totalMem, usedMem, gpuUtil, err := gpuMetrics()
+		if err != nil {
+			return nil, err
+		}
+		metrics.GPUMemTotal = totalMem
+		metrics.GPUMemUtil = usedMem
+		metrics.GPUUtil = gpuUtil
+		metrics.GPUType = externalConfig.Metadata.GPU
+	}
+
+	return &metrics, nil
+}
+
 func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if externalConfig.MetricsAPIKey != "" {
 		apiKey := strings.TrimPrefix(
@@ -127,41 +165,10 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	metrics := Metrics{
-		ID:      externalConfig.Metadata.ID,
-		Domain:  externalConfig.Metadata.Domain,
-		Image:   externalConfig.Metadata.Image,
-		CPUType: externalConfig.Metadata.CPU,
-	}
-
-	memory, err := memory.Get()
+	metrics, err := collectMetrics()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-	metrics.CPUMemTotal = int(memory.Total / 1024 / 1024 / 1024) // to GB
-	metrics.CPUMemUtil = int(memory.Used / 1024 / 1024 / 1024)
-
-	cpuStats, err := cpu.Get()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	busy := cpuStats.User + cpuStats.System + cpuStats.Nice
-	total := busy + cpuStats.Idle
-	metrics.CPUUtil = int(float64(busy) / float64(total) * 100)
-
-	// Set GPU metrics if available
-	if externalConfig.Metadata.GPU != "" && externalConfig.Metadata.GPU != "none" {
-		totalMem, usedMem, gpuUtil, err := gpuMetrics()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		metrics.GPUMemTotal = totalMem
-		metrics.GPUMemUtil = usedMem
-		metrics.GPUUtil = gpuUtil
-		metrics.GPUType = externalConfig.Metadata.GPU
 	}
 
 	w.Header().Set("Content-Type", "application/json")
