@@ -74,6 +74,14 @@ func init() {
 
 // updatePrometheusMetrics updates all Prometheus metrics with the latest values
 func updatePrometheusMetrics(metrics *Metrics) {
+	// Reset all gauge vectors to remove stale label combinations
+	cpuUtilGauge.Reset()
+	gpuUtilGauge.Reset()
+	cpuMemUtilGauge.Reset()
+	gpuMemUtilGauge.Reset()
+	cpuMemTotalGauge.Reset()
+	gpuMemTotalGauge.Reset()
+
 	// Set GPU type to empty string if not available
 	gpuType := metrics.GPUType
 	if gpuType == "" {
