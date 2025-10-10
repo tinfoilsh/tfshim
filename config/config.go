@@ -51,16 +51,17 @@ type ExternalConfig struct {
 
 // Load loads the config from the given files
 func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, error) {
+	var config Config
+	if err := defaults.Set(&config); err != nil {
+		return nil, nil, fmt.Errorf("failed to set defaults: %v", err)
+	}
+
 	configBytes, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read config file: %v", err)
 	}
-	var config Config
 	if err := yaml.Unmarshal(configBytes, &config); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal config: %v", err)
-	}
-	if err := defaults.Set(&config); err != nil {
-		return nil, nil, fmt.Errorf("failed to set defaults: %v", err)
 	}
 
 	if config.UpstreamPort == 0 {
