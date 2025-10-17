@@ -34,12 +34,12 @@ func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin") // cache
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-			w.Header().Set("Access-Control-Expose-Headers", "Ehbp-Encapsulated-Key, Content-Type")
+			w.Header().Set("Access-Control-Expose-Headers", "Ehbp-Encapsulated-Key, Content-Type, Tinfoil-Pt")
 
 			// Echo requested headers or use a safe default
 			reqHdr := r.Header.Get("Access-Control-Request-Headers")
 			if reqHdr == "" {
-				reqHdr = "Authorization, Content-Type, Ehbp-Client-Public-Key, Ehbp-Encapsulated-Key, Tinfoil-Pt"
+				reqHdr = "Authorization, Content-Type, Ehbp-Client-Public-Key, Ehbp-Encapsulated-Key"
 			}
 			w.Header().Set("Access-Control-Allow-Headers", reqHdr)
 
