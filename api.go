@@ -39,7 +39,7 @@ func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 			// Echo requested headers or use a safe default
 			reqHdr := r.Header.Get("Access-Control-Request-Headers")
 			if reqHdr == "" {
-				reqHdr = "Authorization, Content-Type, Ehbp-Client-Public-Key, Ehbp-Encapsulated-Key"
+				reqHdr = "Authorization, Content-Type, Ehbp-Client-Public-Key, Ehbp-Encapsulated-Key, Tinfoil-Pt"
 			}
 			w.Header().Set("Access-Control-Allow-Headers", reqHdr)
 
@@ -86,7 +86,7 @@ func NewShimServer(
 
 	globalMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Tinfoil-PT", string(att.Format))
+			w.Header().Set("Tinfoil-Pt", string(att.Format))
 			next.ServeHTTP(w, r)
 		})
 	}
