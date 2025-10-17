@@ -84,6 +84,13 @@ func NewShimServer(
 		},
 	}
 
+	globalMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Tinfoil-PT", string(att.Format))
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	mux.Handle("/", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if validator != nil && r.URL.Path == "/v1/chat/completions" {
@@ -134,5 +141,5 @@ func NewShimServer(
 	mux.HandleFunc("/.well-known/metrics", metrics.HandlePrometheusMetrics(&externalConfig.Metadata, externalConfig.MetricsAPIKey))
 	mux.HandleFunc(ehbpProtocol.KeysPath, ehbpIdentity.ConfigHandler)
 
-	return corsMiddleware(config, mux)
+	return corsMiddleware(config, globalMiddleware(mux))
 }
