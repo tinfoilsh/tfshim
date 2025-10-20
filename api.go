@@ -73,6 +73,8 @@ func NewShimServer(
 			req.URL.Host = fmt.Sprintf("127.0.0.1:%d", config.UpstreamPort)
 			req.Header.Set("Host", "localhost")
 			req.Host = "localhost"
+			req.Header.Del("Ehbp-Client-Public-Key")
+			req.Header.Del("Ehbp-Fallback")
 			log.Debugf("Proxying request to %+v", req.URL.String())
 		},
 		Transport: &streamTransport{
