@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/sirupsen/logrus"
@@ -155,9 +156,15 @@ func main() {
 			log.Fatalf("Failed to create cert manager: %v", err)
 		}
 
-		cert, err = certManager.Certificate()
-		if err != nil {
-			log.Fatalf("Failed to request TLS certificate: %v", err)
+		// Try in a infinite loop until the certificate is acquired
+		duration := 18 * time.Minute
+		for {
+			cert, err = certManager.Certificate()
+			if err == nil {
+				break // Success
+			}
+			log.Warnf("Certificate request failed, will retry in %s: %v", duration.String(), err)
+			time.Sleep(duration)
 		}
 	}
 
