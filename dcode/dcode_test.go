@@ -18,7 +18,7 @@ func TestDcode(t *testing.T) {
 		panic(err)
 	}
 
-	domains, err := Encode(&att, "example.com")
+	domains, err := EncodeAtt(&att, "example.com")
 	assert.Nil(t, err)
 
 	for _, domain := range domains {
