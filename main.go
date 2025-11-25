@@ -117,14 +117,38 @@ func main() {
 	}
 
 	domains := []string{externalConfig.Domain}
+	domains = append(domains, "*."+externalConfig.Domain) // Also request wildcard domain
+
+	// Encode HPKE key into domains
+	hpkeKeyDomains, err := dcode.Encode(hpkeKeyBytes, "hpke."+externalConfig.Domain)
+	if err != nil {
+		log.Fatalf("Failed to encode HPKE key: %v", err)
+	}
+	domains = append(domains, hpkeKeyDomains...)
 
 	// Encode attestation into domains
 	if config.PublishAttestation {
-		attDomains, err := dcode.Encode(att, externalConfig.Domain)
+		// Encode the full attestation document if possible
+		attDomains, err := dcode.EncodeAtt(att, "att."+externalConfig.Domain)
 		if err != nil {
 			log.Fatalf("Failed to encode attestation: %v", err)
 		}
-		domains = append(domains, attDomains...)
+
+		// Limit to 100 domains SANs per certificate
+		if len(attDomains)+len(domains) <= 100 {
+			domains = append(domains, attDomains...)
+		} else { // Publish attestation document hash instead
+			log.Warn("Attestation document is too large, publishing attestation document hash instead")
+			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+externalConfig.Domain)
+			if err != nil {
+				log.Fatalf("Failed to encode attestation hash: %v", err)
+			}
+			if len(attHashDomains)+len(domains) <= 100 {
+				domains = append(domains, attHashDomains...)
+			} else {
+				log.Fatalf("Attestation document hash is also too large, cannot publish")
+			}
+		}
 	}
 
 	for _, d := range domains {
@@ -157,7 +181,7 @@ func main() {
 		}
 
 		// Try in a infinite loop until the certificate is acquired
-		duration := 18 * time.Minute
+		duration := 18 * time.Minute // Limit set by Let's Encrypt
 		for {
 			cert, err = certManager.Certificate()
 			if err == nil {

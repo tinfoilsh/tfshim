@@ -34,20 +34,11 @@ func gzDecompress(data []byte) ([]byte, error) {
 	return io.ReadAll(gzReader)
 }
 
-// Encode encodes an attestation document into a string of domains
-func Encode(att *attestation.Document, domain string) ([]string, error) {
-	attJSON, err := json.Marshal(att)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal attestation: %v", err)
-	}
-	compressed, err := gzCompress(attJSON)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compress attestation: %v", err)
-	}
-
+// Encode encodes a byte slice into a string of domains
+func Encode(content []byte, domain string) ([]string, error) {
 	// Encode the entire compressed data using base32
 	encoder := base32.StdEncoding.WithPadding(base32.NoPadding)
-	encoded := encoder.EncodeToString(compressed)
+	encoded := encoder.EncodeToString(content)
 	encoded = strings.ToLower(encoded) // Make it lowercase for better readability in domains
 
 	// Chunk
@@ -62,6 +53,19 @@ func Encode(att *attestation.Document, domain string) ([]string, error) {
 	}
 
 	return domains, nil
+}
+
+// EncodeAtt encodes an attestation document into a string of domains
+func EncodeAtt(att *attestation.Document, domain string) ([]string, error) {
+	attJSON, err := json.Marshal(att)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal attestation: %v", err)
+	}
+	compressed, err := gzCompress(attJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compress attestation: %v", err)
+	}
+	return Encode(compressed, domain)
 }
 
 // Decode decodes a string of domains into an attestation document
