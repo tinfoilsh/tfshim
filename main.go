@@ -17,6 +17,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tinfoilsh/stransport/identity"
 	"github.com/tinfoilsh/verifier/attestation"
+	"golang.org/x/net/publicsuffix"
 	"golang.org/x/time/rate"
 
 	"github.com/tinfoilsh/tfshim/config"
@@ -119,8 +120,17 @@ func main() {
 	domains := []string{externalConfig.Domain}
 	domains = append(domains, "*."+externalConfig.Domain) // Also request wildcard domain
 
+	// Compute second-level domain from externalConfig.Domain
+	secondLevelDomain := externalConfig.Domain
+	if d, err := publicsuffix.EffectiveTLDPlusOne(externalConfig.Domain); err == nil {
+		secondLevelDomain = d
+	} else {
+		log.Warnf("Failed to compute registrable domain for %q: %v; using as-is", externalConfig.Domain, err)
+	}
+	log.Debugf("Second-level domain: %s", secondLevelDomain)
+
 	// Encode HPKE key into domains
-	hpkeKeyDomains, err := dcode.Encode(hpkeKeyBytes, "hpke."+externalConfig.Domain)
+	hpkeKeyDomains, err := dcode.Encode(hpkeKeyBytes, "hpke."+secondLevelDomain)
 	if err != nil {
 		log.Fatalf("Failed to encode HPKE key: %v", err)
 	}
@@ -129,7 +139,7 @@ func main() {
 	// Encode attestation into domains
 	if config.PublishAttestation {
 		// Encode the full attestation document if possible
-		attDomains, err := dcode.EncodeAtt(att, "att."+externalConfig.Domain)
+		attDomains, err := dcode.EncodeAtt(att, "att."+secondLevelDomain)
 		if err != nil {
 			log.Fatalf("Failed to encode attestation: %v", err)
 		}
@@ -139,7 +149,7 @@ func main() {
 			domains = append(domains, attDomains...)
 		} else { // Publish attestation document hash instead
 			log.Warn("Attestation document is too large, publishing attestation document hash instead")
-			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+externalConfig.Domain)
+			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+secondLevelDomain)
 			if err != nil {
 				log.Fatalf("Failed to encode attestation hash: %v", err)
 			}
