@@ -69,12 +69,21 @@ func NewShimServer(
 
 	proxy := httputil.ReverseProxy{
 		Director: func(req *http.Request) {
+			originalHost := req.Host
+
 			req.URL.Scheme = "http"
 			req.URL.Host = fmt.Sprintf("127.0.0.1:%d", config.UpstreamPort)
 			req.Header.Set("Host", "localhost")
 			req.Host = "localhost"
 			req.Header.Del("Ehbp-Client-Public-Key")
 			req.Header.Del("Ehbp-Fallback")
+
+			// Forward original host and protocol to the upstream
+			req.Header.Del("Forwarded")
+			req.Header.Del("X-Forwarded-Host")
+			req.Header.Set("Forwarded", fmt.Sprintf("host=\"%s\"", originalHost))
+			req.Header.Set("X-Forwarded-Host", originalHost)
+
 			log.Debugf("Proxying request to %+v", req.URL.String())
 		},
 		Transport: &streamTransport{
