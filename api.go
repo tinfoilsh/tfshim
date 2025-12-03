@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tinfoilsh/stransport/identity"
 	ehbpProtocol "github.com/tinfoilsh/stransport/protocol"
+	"github.com/tinfoilsh/tfshim/acpi"
 	"github.com/tinfoilsh/tfshim/config"
 	"github.com/tinfoilsh/tfshim/key"
 	"github.com/tinfoilsh/tfshim/key/online"
@@ -149,6 +150,7 @@ func NewShimServer(
 	})))
 
 	mux.HandleFunc("/.well-known/tinfoil-metrics", metrics.HandleMetrics(externalConfig))
+	mux.HandleFunc("/.well-known/tinfoil-acpi", acpi.HandleQemuACPI(externalConfig))
 	mux.HandleFunc("/.well-known/metrics", metrics.HandlePrometheusMetrics(&externalConfig.Metadata, externalConfig.MetricsAPIKey))
 	mux.HandleFunc(ehbpProtocol.KeysPath, ehbpIdentity.ConfigHandler)
 
