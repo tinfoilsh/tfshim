@@ -46,6 +46,7 @@ type ExternalConfig struct {
 	CloudflareDNSToken  string   `yaml:"cloudflare-dns-token"`
 	CloudflareZoneToken string   `yaml:"cloudflare-zone-token"`
 	MetricsAPIKey       string   `yaml:"metrics-api-key"`
+	ACPIAPIKey          string   `yaml:"acpi-api-key"`
 	Metadata            Metadata `yaml:"metadata"`
 }
 
