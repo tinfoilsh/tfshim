@@ -150,7 +150,7 @@ func NewShimServer(
 	})))
 
 	mux.HandleFunc("/.well-known/tinfoil-metrics", metrics.HandleMetrics(externalConfig))
-	mux.HandleFunc("/.well-known/tinfoil-acpi", acpi.HandleQemuACPI(externalConfig))
+	mux.HandleFunc("/.well-known/tinfoil-acpi", acpi.HandleQemuACPI(config, externalConfig))
 	mux.HandleFunc("/.well-known/metrics", metrics.HandlePrometheusMetrics(&externalConfig.Metadata, externalConfig.MetricsAPIKey))
 	mux.HandleFunc(ehbpProtocol.KeysPath, ehbpIdentity.ConfigHandler)
 
