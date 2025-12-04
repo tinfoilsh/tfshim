@@ -2,12 +2,12 @@ package acpi
 
 import (
 	"archive/tar"
+	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/tinfoilsh/tfshim/config"
 )
@@ -25,64 +25,56 @@ func HandleQemuACPI(externalConfig *config.ExternalConfig) http.HandlerFunc {
 			}
 		}
 
-		type src struct {
+		type acpi_file struct {
 			Path string
 			Name string
 		}
-		candidates := []src{
+		acpi_files := []acpi_file{
 			{Path: "/sys/firmware/qemu_fw_cfg/by_name/etc/acpi/tables/raw", Name: "acpi_tables.bin"},
 			{Path: "/sys/firmware/qemu_fw_cfg/by_name/etc/acpi/rsdp/raw", Name: "rsdp.bin"},
 			{Path: "/sys/firmware/qemu_fw_cfg/by_name/etc/table-loader/raw", Name: "table_loader.bin"},
 		}
 
-		var sources []src
-		for _, c := range candidates {
-			if fi, err := os.Stat(c.Path); err == nil && !fi.IsDir() {
-				sources = append(sources, c)
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		defer tw.Close()
+
+		for _, af := range acpi_files {
+			fi, err := os.Stat(af.Path)
+			if err != nil || fi.IsDir() {
+				http.Error(w, fmt.Sprintf("ACPI file %s not found", af.Name), http.StatusNotFound)
+				return
 			}
-		}
-		if len(sources) != 3 {
-			http.Error(w, "ACPI files not (all) found", http.StatusNotFound)
-			return
+			f, err := os.Open(af.Path)
+			defer f.Close()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to open ACPI source file %s", af.Name), http.StatusInternalServerError)
+				return
+			}
+			hdr := &tar.Header{
+				Name: af.Name,
+				Mode: 0600,
+				Size: fi.Size(),
+			}
+			if err := tw.WriteHeader(hdr); err != nil {
+				http.Error(w, fmt.Sprintf("Failed to write header for ACPI source file %s", af.Name), http.StatusInternalServerError)
+				return
+			}
+			if _, err := io.Copy(tw, f); err != nil {
+				http.Error(w, fmt.Sprintf("Failed to copy ACPI source file %s", af.Name), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/x-tar")
 		w.Header().Set("Content-Disposition", "attachment; filename=\"acpi.tar\"")
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Encoding", "identity")
 
-		tw := tar.NewWriter(w)
-		defer tw.Close()
-
-		now := time.Now()
-		for _, s := range sources {
-			fi, err := os.Stat(s.Path)
-			if err != nil {
-				http.Error(w, "Failed to stat source file", http.StatusInternalServerError)
-				return
-			}
-			f, err := os.Open(s.Path)
-			if err != nil {
-				http.Error(w, "Failed to open source file", http.StatusInternalServerError)
-				return
-			}
-
-			hdr := &tar.Header{
-				Name:    filepath.ToSlash(s.Name),
-				Mode:    0600,
-				Size:    fi.Size(),
-				ModTime: now,
-			}
-			if err := tw.WriteHeader(hdr); err != nil {
-				f.Close()
-				http.Error(w, "Failed to write tar header", http.StatusInternalServerError)
-				return
-			}
-			if _, err := io.Copy(tw, f); err != nil {
-				f.Close()
-				http.Error(w, "Failed to stream tar content", http.StatusInternalServerError)
-				return
-			}
-			f.Close()
+		if _, err := io.Copy(w, &buf); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to copy ACPI archive to response: %v", err), http.StatusInternalServerError)
+			return
 		}
+
 	}
 }
