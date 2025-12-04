@@ -47,7 +47,7 @@ func HandleQemuACPI(externalConfig *config.ExternalConfig) http.HandlerFunc {
 			}
 			hdr := &tar.Header{
 				Name: af.Name,
-				Mode: 0600,
+				Mode: 0644,
 				Size: int64(len(data)),
 			}
 			if err := tw.WriteHeader(hdr); err != nil {
@@ -58,6 +58,11 @@ func HandleQemuACPI(externalConfig *config.ExternalConfig) http.HandlerFunc {
 				http.Error(w, fmt.Sprintf("Failed to write ACPI source file %s", af.Name), http.StatusInternalServerError)
 				return
 			}
+		}
+
+		if err := tw.Close(); err != nil {
+			http.Error(w, "Failed to finalize tar", http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/x-tar")
