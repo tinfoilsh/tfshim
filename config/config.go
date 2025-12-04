@@ -24,7 +24,7 @@ type Config struct {
 
 	RateLimit   float64 `yaml:"rate-limit"`
 	RateBurst   int     `yaml:"rate-burst"`
-	CacheDir    string  `yaml:"cache-dir" default:"/mnt/ramdisk/certs"`
+	CacheDir    string  `yaml:"cache-dir" default:"/mnt/ramdisk/tfshim-cache"`
 	Email       string  `yaml:"email" default:"tls@tinfoil.sh"`
 	HPKEKeyFile string  `yaml:"hpke-key-file" default:"/mnt/ramdisk/hpke_key.json"`
 
