@@ -40,28 +40,22 @@ func HandleQemuACPI(externalConfig *config.ExternalConfig) http.HandlerFunc {
 		defer tw.Close()
 
 		for _, af := range acpi_files {
-			fi, err := os.Stat(af.Path)
-			if err != nil || fi.IsDir() {
-				http.Error(w, fmt.Sprintf("ACPI file %s not found", af.Name), http.StatusNotFound)
-				return
-			}
-			f, err := os.Open(af.Path)
-			defer f.Close()
+			data, err := os.ReadFile(af.Path)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to open ACPI source file %s", af.Name), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("Failed to read ACPI source file %s", af.Name), http.StatusInternalServerError)
 				return
 			}
 			hdr := &tar.Header{
 				Name: af.Name,
 				Mode: 0600,
-				Size: fi.Size(),
+				Size: int64(len(data)),
 			}
 			if err := tw.WriteHeader(hdr); err != nil {
 				http.Error(w, fmt.Sprintf("Failed to write header for ACPI source file %s", af.Name), http.StatusInternalServerError)
 				return
 			}
-			if _, err := io.Copy(tw, f); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to copy ACPI source file %s", af.Name), http.StatusInternalServerError)
+			if _, err := tw.Write(data); err != nil {
+				http.Error(w, fmt.Sprintf("Failed to write ACPI source file %s", af.Name), http.StatusInternalServerError)
 				return
 			}
 		}
