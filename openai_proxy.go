@@ -126,8 +126,21 @@ func (t *streamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		defer pw.Close()
 
 		scanner := bufio.NewScanner(originalBody)
+		lastLineWasEmpty := false
 		for scanner.Scan() {
 			line := scanner.Text()
+
+			if line == "" {
+				if lastLineWasEmpty {
+					continue
+				}
+				lastLineWasEmpty = true
+				pw.Write([]byte("\n"))
+				continue
+			}
+
+			lastLineWasEmpty = false
+
 			if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
 				data := strings.TrimPrefix(line, "data: ")
 				modifiedData, err := addPaddingToStreamChunk(data)
