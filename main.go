@@ -15,7 +15,7 @@ import (
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
-	"github.com/tinfoilsh/stransport/identity"
+	"github.com/tinfoilsh/encrypted-http-body-protocol/identity"
 	"github.com/tinfoilsh/verifier/attestation"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/time/rate"

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/tinfoilsh/stransport/identity"
-	ehbpProtocol "github.com/tinfoilsh/stransport/protocol"
+	"github.com/tinfoilsh/encrypted-http-body-protocol/identity"
+	ehbpProtocol "github.com/tinfoilsh/encrypted-http-body-protocol/protocol"
 	"github.com/tinfoilsh/tfshim/acpi"
 	"github.com/tinfoilsh/tfshim/config"
 	"github.com/tinfoilsh/tfshim/key"
@@ -35,12 +35,12 @@ func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin") // cache
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-			w.Header().Set("Access-Control-Expose-Headers", "Ehbp-Encapsulated-Key, Content-Type, Tinfoil-Pt")
+			w.Header().Set("Access-Control-Expose-Headers", "Ehbp-Encapsulated-Key, Ehbp-Response-Nonce, Content-Type, Tinfoil-Pt")
 
 			// Echo requested headers or use a safe default
 			reqHdr := r.Header.Get("Access-Control-Request-Headers")
 			if reqHdr == "" {
-				reqHdr = "Authorization, Content-Type, Ehbp-Client-Public-Key, Ehbp-Encapsulated-Key"
+				reqHdr = "Authorization, Content-Type, Ehbp-Encapsulated-Key"
 			}
 			w.Header().Set("Access-Control-Allow-Headers", reqHdr)
 
@@ -76,7 +76,6 @@ func NewShimServer(
 			req.URL.Host = fmt.Sprintf("127.0.0.1:%d", config.UpstreamPort)
 			req.Header.Set("Host", "localhost")
 			req.Host = "localhost"
-			req.Header.Del("Ehbp-Client-Public-Key")
 			req.Header.Del("Ehbp-Fallback")
 
 			// Forward original host and protocol to the upstream
