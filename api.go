@@ -77,6 +77,7 @@ func NewShimServer(
 			req.Header.Set("Host", "localhost")
 			req.Host = "localhost"
 			req.Header.Del("Ehbp-Fallback")
+			req.Header.Del(ehbpProtocol.EncapsulatedKeyHeader)
 
 			// Forward original host and protocol to the upstream
 			req.Header.Del("Forwarded")
@@ -91,6 +92,7 @@ func NewShimServer(
 		},
 		ModifyResponse: func(res *http.Response) error {
 			res.Header.Del("Access-Control-Allow-Origin")
+			res.Header.Del(ehbpProtocol.ResponseNonceHeader)
 			return nil
 		},
 	}
