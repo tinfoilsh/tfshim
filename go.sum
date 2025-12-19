@@ -101,8 +101,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/theupdateframework/go-tuf/v2 v2.1.1 h1:OWcoHItwsGO+7m0wLa7FDWPR4oB1cj0zOr1kosE4G+I=
 github.com/theupdateframework/go-tuf/v2 v2.1.1/go.mod h1:V675cQGhZONR0OGQ8r1feO0uwtsTBYPDWHzAAPn5rjE=
-github.com/tinfoilsh/encrypted-http-body-protocol v0.1.0 h1:JEXbTsPye9HcBdF5Su2bgHn5Y2it39j9Xga73qdifcM=
-github.com/tinfoilsh/encrypted-http-body-protocol v0.1.0/go.mod h1:BnW5Ego7O/BSS0dzBuyyySNl32iOHsuRYCSiLMnlRSE=
+github.com/tinfoilsh/encrypted-http-body-protocol v0.1.2 h1:vSonE8PqbOyg2sNaxy5tAeb04bljuywloEQXgokmE8g=
+github.com/tinfoilsh/encrypted-http-body-protocol v0.1.2/go.mod h1:BnW5Ego7O/BSS0dzBuyyySNl32iOHsuRYCSiLMnlRSE=
 github.com/tinfoilsh/go-sev-guest v0.0.0-20250704193550-c725e6216008 h1:utg5iGJKOGTefc5gWxH2+XaXpra8R1utGA3x1WO61AY=
 github.com/tinfoilsh/go-sev-guest v0.0.0-20250704193550-c725e6216008/go.mod h1:SK9vW+uyfuzYdVN0m8BShL3OQCtXZe/JPF7ZkpD3760=
 github.com/tinfoilsh/verifier v0.1.18 h1:PymExtv23p4GTmTB/cUVJ2arHcwcAIA8AI1Ze4wOA5A=

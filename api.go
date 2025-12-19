@@ -65,7 +65,7 @@ func NewShimServer(
 	config *config.Config,
 	externalConfig *config.ExternalConfig,
 ) http.Handler {
-	ehbpMiddleware := ehbpIdentity.Middleware(true)
+	ehbpMiddleware := ehbpIdentity.Middleware()
 	mux := http.NewServeMux()
 
 	proxy := httputil.ReverseProxy{
@@ -76,7 +76,6 @@ func NewShimServer(
 			req.URL.Host = fmt.Sprintf("127.0.0.1:%d", config.UpstreamPort)
 			req.Header.Set("Host", "localhost")
 			req.Host = "localhost"
-			req.Header.Del("Ehbp-Fallback")
 			req.Header.Del(ehbpProtocol.EncapsulatedKeyHeader)
 
 			// Forward original host and protocol to the upstream
