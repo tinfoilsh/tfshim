@@ -104,7 +104,7 @@ func main() {
 	// Request attestation
 	log.Printf("Fetching attestation over %x", attestationBody)
 	var att *attestation.Document
-	if externalConfig.Domain == "localhost" || *dev || config.DummyAttestation {
+	if externalConfig.Domain == "localhost" || *dev || config.AttestationType == "dummy" {
 		log.Warn("Using dummy attestation report")
 		att = &attestation.Document{
 			Format: "https://tinfoil.sh/predicate/dummy/v2",
@@ -138,17 +138,20 @@ func main() {
 
 	// Encode attestation into domains
 	if config.PublishAttestation {
-		// Encode the full attestation document if possible
-		attDomains, err := dcode.EncodeAtt(att, "att."+secondLevelDomain)
-		if err != nil {
-			log.Fatalf("Failed to encode attestation: %v", err)
-		}
+		if config.FullAttestation {
+			log.Warn("Publishing full attestation document")
+			// Encode the full attestation document if possible
+			attDomains, err := dcode.EncodeAtt(att, "att."+secondLevelDomain)
+			if err != nil {
+				log.Fatalf("Failed to encode attestation: %v", err)
+			}
 
-		// Limit to 100 domains SANs per certificate
-		if len(attDomains)+len(domains) <= 100 {
-			domains = append(domains, attDomains...)
-		} else { // Publish attestation document hash instead
-			log.Warn("Attestation document is too large, publishing attestation document hash instead")
+			// Limit to 100 domains SANs per certificate
+			if len(attDomains)+len(domains) <= 100 {
+				domains = append(domains, attDomains...)
+			}
+		} else { // (Default) Publish attestation document hash
+			log.Warn("Publishing attestation document hash")
 			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+secondLevelDomain)
 			if err != nil {
 				log.Fatalf("Failed to encode attestation hash: %v", err)
@@ -156,7 +159,7 @@ func main() {
 			if len(attHashDomains)+len(domains) <= 100 {
 				domains = append(domains, attHashDomains...)
 			} else {
-				log.Fatalf("Attestation document hash is also too large, cannot publish")
+				log.Fatalf("Attestation document hash is too large, cannot publish")
 			}
 		}
 	}
