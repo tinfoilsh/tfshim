@@ -104,7 +104,7 @@ func main() {
 	// Request attestation
 	log.Printf("Fetching attestation over %x", attestationBody)
 	var att *attestation.Document
-	if externalConfig.Domain == "localhost" || *dev || config.AttestationType == "dummy" {
+	if externalConfig.Domain == "localhost" || *dev || config.DummyAttestation {
 		log.Warn("Using dummy attestation report")
 		att = &attestation.Document{
 			Format: "https://tinfoil.sh/predicate/dummy/v2",
@@ -138,7 +138,7 @@ func main() {
 
 	// Encode attestation into domains
 	if config.PublishAttestation {
-		if config.FullAttestation {
+		if config.PublishFullAttestation {
 			log.Warn("Publishing full attestation document")
 			// Encode the full attestation document if possible
 			attDomains, err := dcode.EncodeAtt(att, "att."+secondLevelDomain)
