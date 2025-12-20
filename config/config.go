@@ -17,7 +17,7 @@ type Config struct {
 	Paths         []string `yaml:"paths"`
 	OriginDomains []string `yaml:"origins"`
 
-	TLSMode          string `yaml:"tls-mode" default:"production"` // self-signed | staging | production
+	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"` // self-signed | staging | production | cert-proxy
 	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns
 
 	ControlPlane string `yaml:"control-plane"`
@@ -68,7 +68,7 @@ func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, erro
 	if config.UpstreamPort == 0 {
 		return nil, nil, fmt.Errorf("upstream port is not set")
 	}
-	if !slices.Contains([]string{"self-signed", "staging", "production"}, config.TLSMode) {
+	if !slices.Contains([]string{"self-signed", "staging", "production", "cert-proxy"}, config.TLSMode) {
 		return nil, nil, fmt.Errorf("invalid TLS mode: %s", config.TLSMode)
 	}
 

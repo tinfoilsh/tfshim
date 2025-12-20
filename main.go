@@ -172,7 +172,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to generate self signed TLS certificate: %v", err)
 		}
-	} else if config.TLSChallengeMode == "cert-proxy" {
+	} else if config.TLSMode == "cert-proxy" {
 		// Use cert proxy manager to obtain certificate from control plane
 		if config.ControlPlane == "" {
 			log.Fatal("cert-proxy mode requires control-plane URL to be set")
