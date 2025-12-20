@@ -172,7 +172,31 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to generate self signed TLS certificate: %v", err)
 		}
-	} else { // Prod TLS cert
+	} else if config.TLSChallengeMode == "cert-proxy" {
+		// Use cert proxy manager to obtain certificate from control plane
+		if config.ControlPlane == "" {
+			log.Fatal("cert-proxy mode requires control-plane URL to be set")
+		}
+		certProxyManager, err := tlsutil.NewCertProxyManager(
+			domains,
+			config.CacheDir,
+			config.ControlPlane,
+			privateKey,
+		)
+		if err != nil {
+			log.Fatalf("Failed to create cert proxy manager: %v", err)
+		}
+
+		duration := 18 * time.Minute
+		for {
+			cert, err = certProxyManager.Certificate()
+			if err == nil {
+				break
+			}
+			log.Warnf("Certificate request failed, will retry in %s: %v", duration.String(), err)
+			time.Sleep(duration)
+		}
+	} else { // ACME-based TLS cert (tls or dns challenge)
 		dir := lego.LEDirectoryProduction
 		if config.TLSMode == "staging" {
 			dir = lego.LEDirectoryStaging
@@ -190,12 +214,11 @@ func main() {
 			log.Fatalf("Failed to create cert manager: %v", err)
 		}
 
-		// Try in a infinite loop until the certificate is acquired
 		duration := 18 * time.Minute // Limit set by Let's Encrypt
 		for {
 			cert, err = certManager.Certificate()
 			if err == nil {
-				break // Success
+				break
 			}
 			log.Warnf("Certificate request failed, will retry in %s: %v", duration.String(), err)
 			time.Sleep(duration)
