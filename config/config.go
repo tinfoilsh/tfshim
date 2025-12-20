@@ -29,7 +29,8 @@ type Config struct {
 	HPKEKeyFile string  `yaml:"hpke-key-file" default:"/mnt/ramdisk/hpke_key.json"`
 
 	PublishAttestation bool `yaml:"publish-attestation" default:"true"`
-	DummyAttestation   bool `yaml:"dummy-attestation"`
+	DummyAttestation   bool `yaml:"dummy-attestation" default:"false"`
+	FullAttestation    bool `yaml:"full-attestation" default:"false"`
 
 	Verbose bool `yaml:"verbose"`
 }
