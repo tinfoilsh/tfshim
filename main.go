@@ -185,6 +185,7 @@ func main() {
 			config.CacheDir,
 			config.ControlPlane,
 			privateKey,
+			att,
 		)
 		if err != nil {
 			log.Fatalf("Failed to create cert proxy manager: %v", err)

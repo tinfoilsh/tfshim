@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/tinfoilsh/verifier/attestation"
 )
 
 // CertProxyManager obtains certificates from a control plane proxy
@@ -25,6 +26,7 @@ type CertProxyManager struct {
 	cacheDir        string
 	controlPlaneURL string
 	privateKey      *ecdsa.PrivateKey
+	attestation     *attestation.Document
 }
 
 // NewCertProxyManager creates a new certificate manager that obtains certs via control plane
@@ -33,6 +35,7 @@ func NewCertProxyManager(
 	cacheDir string,
 	controlPlaneURL string,
 	privateKey *ecdsa.PrivateKey,
+	att *attestation.Document,
 ) (*CertProxyManager, error) {
 	if controlPlaneURL == "" {
 		return nil, fmt.Errorf("control plane URL is required")
@@ -47,6 +50,7 @@ func NewCertProxyManager(
 		cacheDir:        cacheDir,
 		controlPlaneURL: controlPlaneURL,
 		privateKey:      privateKey,
+		attestation:     att,
 	}, nil
 }
 
@@ -130,9 +134,11 @@ func (m *CertProxyManager) requestCertificate(csrPEM []byte) ([]byte, error) {
 	}
 
 	reqBody := struct {
-		CSR string `json:"csr"`
+		CSR         string                `json:"csr"`
+		Attestation *attestation.Document `json:"attestation,omitempty"`
 	}{
-		CSR: string(csrPEM),
+		CSR:         string(csrPEM),
+		Attestation: m.attestation,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
