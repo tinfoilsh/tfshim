@@ -21,6 +21,7 @@ type Config struct {
 	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns
 
 	ControlPlane string `yaml:"control-plane"`
+	FreeEndpoint bool   `yaml:"free-endpoint" default:"false"`
 
 	RateLimit   float64 `yaml:"rate-limit"`
 	RateBurst   int     `yaml:"rate-burst"`
