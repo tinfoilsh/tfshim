@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -150,7 +151,8 @@ func (m *CertProxyManager) requestCertificate(csrPEM []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := http.Post(certURL, "application/json", bytes.NewReader(jsonBody))
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Post(certURL, "application/json", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request to control plane: %w", err)
 	}
