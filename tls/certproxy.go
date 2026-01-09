@@ -34,6 +34,9 @@ func NewCertProxyManager(
 	controlPlaneURL string,
 	privateKey *ecdsa.PrivateKey,
 ) (*CertProxyManager, error) {
+	if len(domains) == 0 {
+		return nil, fmt.Errorf("at least one domain is required")
+	}
 	if controlPlaneURL == "" {
 		return nil, fmt.Errorf("control plane URL is required")
 	}
