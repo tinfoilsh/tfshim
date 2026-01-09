@@ -40,6 +40,13 @@ func NewCertProxyManager(
 	if controlPlaneURL == "" {
 		return nil, fmt.Errorf("control plane URL is required")
 	}
+	parsedURL, err := url.Parse(controlPlaneURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid control plane URL: %w", err)
+	}
+	if parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("control plane URL must use HTTPS scheme")
+	}
 
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
