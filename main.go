@@ -149,6 +149,8 @@ func main() {
 			// Limit to 100 domains SANs per certificate
 			if len(attDomains)+len(domains) <= 100 {
 				domains = append(domains, attDomains...)
+			} else {
+				log.Warn("Full attestation too large for certificate SANs, attestation not published")
 			}
 		} else { // (Default) Publish attestation document hash
 			log.Warn("Publishing attestation document hash")
