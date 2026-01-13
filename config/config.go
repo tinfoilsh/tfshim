@@ -20,8 +20,8 @@ type Config struct {
 	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"` // self-signed | staging | production | cert-proxy
 	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns
 
-	ControlPlane string `yaml:"control-plane"`
-	FreeEndpoint bool   `yaml:"free-endpoint" default:"false"`
+	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
+	Authenticated bool   `yaml:"authenticated" default:"false"`
 
 	RateLimit   float64 `yaml:"rate-limit"`
 	RateBurst   int     `yaml:"rate-burst"`

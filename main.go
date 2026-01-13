@@ -59,14 +59,14 @@ func main() {
 			log.Fatalf("Failed to parse control plane URL: %v", err)
 		}
 
-		if config.FreeEndpoint {
-			validator = nil
-			log.Warn("API key verification disabled (free endpoint)")
-		} else {
+		if config.Authenticated {
 			validator, err = online.NewValidator(controlPlaneURL.JoinPath("api", "shim", "validate").String())
 			if err != nil {
 				log.Fatalf("Failed to initialize online API key verifier: %v", err)
 			}
+		} else {
+			validator = nil
+			log.Warn("API key verification disabled (unauthenticated endpoint)")
 		}
 	} else {
 		validator = nil
