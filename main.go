@@ -197,7 +197,7 @@ func main() {
 			log.Fatalf("Failed to create cert proxy manager: %v", err)
 		}
 
-		duration := 18 * time.Minute
+		duration := 5 * time.Minute
 		for {
 			cert, err = certProxyManager.Certificate()
 			if err == nil {
