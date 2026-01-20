@@ -32,8 +32,8 @@ jobs:
       - name: Trigger config repo updates
         run: |
           # Download the checksums file that goreleaser just created
-          gh release download "${{ github.ref_name }}" --pattern "checksums.txt"
-          SHA=$(grep "tfshim$" checksums.txt | awk '{print $1}')
+          gh release download "${{ github.ref_name }}" --pattern "tfshim_checksums.txt"
+          SHA=$(grep "tfshim$" tfshim_checksums.txt | awk '{print $1}')
 
           # Trigger the update workflow
           gh workflow run update-config-repos.yml \

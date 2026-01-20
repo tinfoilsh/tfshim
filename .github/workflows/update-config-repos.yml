@@ -28,8 +28,8 @@ jobs:
             echo "sha=${{ github.event.inputs.sha }}" >> $GITHUB_OUTPUT
           else
             VERSION="${{ github.event.release.tag_name }}"
-            gh release download "$VERSION" --repo "${{ github.repository }}" --pattern "checksums.txt"
-            SHA=$(grep "tfshim$" checksums.txt | awk '{print $1}')
+            gh release download "$VERSION" --repo "${{ github.repository }}" --pattern "tfshim_checksums.txt"
+            SHA=$(grep "tfshim$" tfshim_checksums.txt | awk '{print $1}')
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "sha=$SHA" >> $GITHUB_OUTPUT
           fi
