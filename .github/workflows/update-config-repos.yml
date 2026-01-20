@@ -1,0 +1,89 @@
+name: Update Shim Version in Config Repos
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.3.6)'
+        required: true
+      sha:
+        description: 'SHA256 hash of the shim'
+        required: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+      repos: ${{ steps.repos.outputs.repos }}
+    steps:
+      - name: Get version and SHA
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "sha=${{ github.event.inputs.sha }}" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+            gh release download "$VERSION" --repo "${{ github.repository }}" --pattern "checksums.txt"
+            SHA=$(grep "tfshim$" checksums.txt | awk '{print $1}')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "sha=$SHA" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find repos with tinfoil-functions topic
+        id: repos
+        run: |
+          REPOS=$(gh api search/repositories -f q='topic:tinfoil-functions' \
+            --jq '[.items[] | "\(.owner.login)/\(.name)"]')
+          echo "repos=$REPOS" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update:
+    needs: prepare
+    if: needs.prepare.outputs.repos != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: ${{ fromJson(needs.prepare.outputs.repos) }}
+      fail-fast: false
+    steps:
+      - id: parse
+        run: |
+          echo "owner=$(echo '${{ matrix.repo }}' | cut -d'/' -f1)" >> $GITHUB_OUTPUT
+          echo "name=$(echo '${{ matrix.repo }}' | cut -d'/' -f2)" >> $GITHUB_OUTPUT
+
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.SHIM_UPDATER_APP_ID }}
+          private-key: ${{ secrets.SHIM_UPDATER_PRIVATE_KEY }}
+          owner: ${{ steps.parse.outputs.owner }}
+          repositories: ${{ steps.parse.outputs.name }}
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Update shim version
+        run: |
+          if [ -f tinfoil-config.yml ]; then
+            sed -i "s|^shim-version:.*|shim-version: ${{ needs.prepare.outputs.version }}@sha256:${{ needs.prepare.outputs.sha }}|" tinfoil-config.yml
+          fi
+
+      - uses: peter-evans/create-pull-request@v6
+        if: hashFiles('tinfoil-config.yml') != ''
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: "chore: update shim-version to ${{ needs.prepare.outputs.version }}"
+          title: "Update shim-version to ${{ needs.prepare.outputs.version }}"
+          body: "Automated PR to update tfshim to `${{ needs.prepare.outputs.version }}`"
+          branch: update-shim-${{ needs.prepare.outputs.version }}
+          base: main
