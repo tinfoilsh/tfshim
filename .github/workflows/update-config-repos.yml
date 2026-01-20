@@ -39,9 +39,18 @@ jobs:
       - name: Find repos with tinfoil-functions topic
         id: repos
         run: |
-          REPOS=$(gh api search/repositories -f q='topic:tinfoil-functions' \
-            --jq '[.items[] | "\(.owner.login)/\(.name)"]')
+          # Search for repos with the topic - returns empty array if none found
+          RESPONSE=$(gh api 'search/repositories?q=topic:tinfoil-functions' 2>&1) || true
+
+          if echo "$RESPONSE" | jq -e '.items' > /dev/null 2>&1; then
+            REPOS=$(echo "$RESPONSE" | jq -c '[.items[] | "\(.owner.login)/\(.name)"]')
+          else
+            echo "Search response: $RESPONSE"
+            REPOS='[]'
+          fi
+
           echo "repos=$REPOS" >> $GITHUB_OUTPUT
+          echo "Found repos: $REPOS"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
