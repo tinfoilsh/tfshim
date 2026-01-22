@@ -249,7 +249,7 @@ func main() {
 	listenAddr := fmt.Sprintf(":%d", config.ListenPort)
 	httpServer := &http.Server{
 		Addr:      listenAddr,
-		Handler:   NewShimServer(validator, rateLimiter, att, serverIdentity, config, externalConfig),
+		Handler:   NewShimServer(validator, rateLimiter, att, serverIdentity, cert, config, externalConfig),
 		TLSConfig: tlsConfig,
 	}
 

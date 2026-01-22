@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -62,6 +64,7 @@ func NewShimServer(
 	rateLimiter *RateLimiter,
 	att *attestation.Document,
 	ehbpIdentity *identity.Identity,
+	tlsCert *tls.Certificate,
 	config *config.Config,
 	externalConfig *config.ExternalConfig,
 ) http.Handler {
@@ -148,6 +151,24 @@ func NewShimServer(
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(att)
 	})))
+
+	mux.HandleFunc("/.well-known/tinfoil-certificate", func(w http.ResponseWriter, r *http.Request) {
+		if tlsCert == nil || len(tlsCert.Certificate) == 0 {
+			http.Error(w, "Certificate not available", http.StatusServiceUnavailable)
+			return
+		}
+
+		// Encode the leaf certificate as PEM
+		certPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: tlsCert.Certificate[0],
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"certificate": string(certPEM),
+		})
+	})
 
 	mux.HandleFunc("/.well-known/tinfoil-metrics", metrics.HandleMetrics(externalConfig))
 	mux.HandleFunc("/.well-known/tinfoil-acpi", acpi.HandleQemuACPI(config, externalConfig))
