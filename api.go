@@ -22,6 +22,29 @@ import (
 	"github.com/tinfoilsh/verifier/attestation"
 )
 
+// pathMatchesPattern checks if a request path matches a pattern.
+// Patterns can be exact matches or use a trailing * for prefix matching.
+// Examples:
+//   - "/v1/models" matches only "/v1/models"
+//   - "/v1/user/*" matches "/v1/user/123", "/v1/user/abc/settings", etc.
+func pathMatchesPattern(pattern, path string) bool {
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(path, prefix)
+	}
+	return pattern == path
+}
+
+// pathAllowed checks if the request path matches any of the allowed patterns.
+func pathAllowed(allowedPaths []string, path string) bool {
+	for _, pattern := range allowedPaths {
+		if pathMatchesPattern(pattern, path) {
+			return true
+		}
+	}
+	return false
+}
+
 func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -138,7 +161,7 @@ func NewShimServer(
 			}
 		}
 
-		if len(config.Paths) > 0 && !slices.Contains(config.Paths, r.URL.Path) {
+		if len(config.Paths) > 0 && !pathAllowed(config.Paths, r.URL.Path) {
 			http.Error(w, "shim: 403 path not allowed", http.StatusForbidden)
 			return
 		}
