@@ -44,12 +44,17 @@ type Metadata struct {
 }
 
 type ExternalConfig struct {
-	Domain              string   `yaml:"domain"`
-	CloudflareDNSToken  string   `yaml:"cloudflare-dns-token"`
-	CloudflareZoneToken string   `yaml:"cloudflare-zone-token"`
-	MetricsAPIKey       string   `yaml:"metrics-api-key"`
-	ACPIAPIKey          string   `yaml:"acpi-api-key"`
-	Metadata            Metadata `yaml:"metadata"`
+	// Populated from env/secrets sections after loading
+	Domain              string
+	CloudflareDNSToken  string
+	CloudflareZoneToken string
+	MetricsAPIKey       string
+	ACPIAPIKey          string
+
+	// New format sections
+	Env      map[string]string `yaml:"env"`
+	Secrets  map[string]string `yaml:"secrets"`
+	Metadata Metadata          `yaml:"metadata"`
 }
 
 // Load loads the config from the given files
@@ -84,6 +89,17 @@ func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, erro
 	}
 	if err := defaults.Set(&externalConfig); err != nil {
 		return nil, nil, fmt.Errorf("failed to set defaults: %v", err)
+	}
+
+	// Populate fields from new format sections
+	if externalConfig.Env != nil {
+		externalConfig.Domain = externalConfig.Env["DOMAIN"]
+	}
+	if externalConfig.Secrets != nil {
+		externalConfig.CloudflareDNSToken = externalConfig.Secrets["cloudflare-dns-token"]
+		externalConfig.CloudflareZoneToken = externalConfig.Secrets["cloudflare-zone-token"]
+		externalConfig.MetricsAPIKey = externalConfig.Secrets["metrics-api-key"]
+		externalConfig.ACPIAPIKey = externalConfig.Secrets["acpi-api-key"]
 	}
 
 	return &config, &externalConfig, nil
