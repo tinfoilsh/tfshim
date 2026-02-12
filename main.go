@@ -211,6 +211,11 @@ func main() {
 		if config.TLSMode == "staging" {
 			dir = lego.LEDirectoryStaging
 		}
+		// TLS-ALPN-01 can only validate directly routable domains, not wildcards or encoded SANs
+		if config.TLSChallengeMode == "tls" {
+			domains = []string{externalConfig.Domain}
+			log.Warn("TLS-ALPN-01 challenge: only requesting certificate for base domain")
+		}
 		certManager, err := tlsutil.NewCertManager(
 			domains,
 			config.Email, config.CacheDir, dir,
