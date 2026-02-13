@@ -172,7 +172,7 @@ func (m *CertManager) Certificate() (*tls.Certificate, error) {
 	if err := os.WriteFile(certFile, certResource.Certificate, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write certificate to cache: %w", err)
 	}
-	if err := os.WriteFile(keyFile, keyBytes, 0644); err != nil {
+	if err := os.WriteFile(keyFile, keyBytes, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write private key to cache: %w", err)
 	}
 
