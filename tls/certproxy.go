@@ -21,6 +21,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const certProxyTimeout = 5 * time.Minute
+
 // CertProxyManager obtains certificates from a control plane proxy.
 // When httpChallengeDomains is set, it uses a two-phase relay: the control plane
 // handles DNS-01 for encoded SANs while the shim serves HTTP-01 for the base domain.
@@ -151,7 +153,7 @@ func (m *CertProxyManager) obtainWithHTTPRelay(csrPEM []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	client := &http.Client{Timeout: 5 * time.Minute}
+	client := &http.Client{Timeout: certProxyTimeout}
 	resp, err := client.Post(certURL, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("phase 1 request failed: %w", err)
@@ -195,7 +197,11 @@ func (m *CertProxyManager) obtainWithHTTPRelay(csrPEM []byte) ([]byte, error) {
 		}
 		log.Debugf("Serving HTTP-01 challenge for %s (token=%s...)", ch.Domain, tokenPreview)
 	}
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       10 * time.Second,
+	}
 
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", m.listenPort))
 	if err != nil {
@@ -286,7 +292,7 @@ func (m *CertProxyManager) requestCertificate(csrPEM []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	client := &http.Client{Timeout: 5 * time.Minute}
+	client := &http.Client{Timeout: certProxyTimeout}
 	resp, err := client.Post(certURL, "application/json", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request to control plane: %w", err)

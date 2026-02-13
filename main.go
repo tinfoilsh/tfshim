@@ -142,6 +142,8 @@ func main() {
 	}
 	encodedDomains = append(encodedDomains, hpkeKeyDomains...)
 
+	reservedSANs := 2 // base + wildcard
+
 	if config.PublishAttestation {
 		if config.PublishFullAttestation {
 			log.Warn("Publishing full attestation document")
@@ -149,7 +151,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Failed to encode attestation: %v", err)
 			}
-			if len(attDomains)+len(encodedDomains)+2 <= 100 { // +2 for base + wildcard
+			if len(attDomains)+len(encodedDomains)+reservedSANs <= 100 {
 				encodedDomains = append(encodedDomains, attDomains...)
 			} else {
 				log.Warn("Full attestation too large for certificate SANs, attestation not published")
@@ -160,7 +162,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Failed to encode attestation hash: %v", err)
 			}
-			if len(attHashDomains)+len(encodedDomains)+2 <= 100 {
+			if len(attHashDomains)+len(encodedDomains)+reservedSANs <= 100 {
 				encodedDomains = append(encodedDomains, attHashDomains...)
 			} else {
 				log.Fatalf("Attestation document hash is too large, cannot publish")
