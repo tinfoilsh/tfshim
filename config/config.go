@@ -17,8 +17,9 @@ type Config struct {
 	Paths         []string `yaml:"paths"`
 	OriginDomains []string `yaml:"origins"`
 
-	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"` // self-signed | staging | production | cert-proxy
-	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns | http
+	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"`    // self-signed | acme | cert-proxy
+	TLSEnv           string `yaml:"tls-env" default:"production"`     // production | staging
+	TLSChallengeMode string `yaml:"tls-challenge" default:"dns"`      // tls | dns | http
 
 	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
 	Authenticated bool   `yaml:"authenticated" default:"false"`
@@ -75,8 +76,11 @@ func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, erro
 	if config.UpstreamPort == 0 {
 		return nil, nil, fmt.Errorf("upstream port is not set")
 	}
-	if !slices.Contains([]string{"self-signed", "staging", "production", "cert-proxy"}, config.TLSMode) {
-		return nil, nil, fmt.Errorf("invalid TLS mode: %s", config.TLSMode)
+	if !slices.Contains([]string{"self-signed", "acme", "cert-proxy"}, config.TLSMode) {
+		return nil, nil, fmt.Errorf("invalid TLS mode: %s (must be self-signed, acme, or cert-proxy)", config.TLSMode)
+	}
+	if !slices.Contains([]string{"production", "staging"}, config.TLSEnv) {
+		return nil, nil, fmt.Errorf("invalid TLS environment: %s (must be production or staging)", config.TLSEnv)
 	}
 	if !slices.Contains([]string{"tls", "dns", "http"}, config.TLSChallengeMode) {
 		return nil, nil, fmt.Errorf("invalid TLS challenge mode: %s (must be tls, dns, or http)", config.TLSChallengeMode)
