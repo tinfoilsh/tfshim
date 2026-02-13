@@ -20,6 +20,7 @@ type Config struct {
 	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"`    // self-signed | acme | cert-proxy
 	TLSEnv           string `yaml:"tls-env" default:"production"`     // production | staging
 	TLSChallengeMode string `yaml:"tls-challenge" default:"dns"`      // tls | dns | http
+	TLSWildcard      bool   `yaml:"tls-wildcard" default:"false"`     // include wildcard SAN (*.domain)
 
 	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
 	Authenticated bool   `yaml:"authenticated" default:"false"`
