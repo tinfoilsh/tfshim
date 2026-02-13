@@ -123,7 +123,6 @@ func main() {
 	}
 
 	baseDomain := externalConfig.Domain
-	wildcardDomain := "*." + baseDomain
 
 	// Compute second-level domain
 	secondLevelDomain := baseDomain
@@ -142,7 +141,11 @@ func main() {
 	}
 	encodedDomains = append(encodedDomains, hpkeKeyDomains...)
 
-	reservedSANs := 2 // base + wildcard
+	// Reserve SAN slots for non-encoded domains
+	reservedSANs := 1 // base domain
+	if config.TLSWildcard {
+		reservedSANs = 2 // base + wildcard
+	}
 
 	if config.PublishAttestation {
 		if config.PublishFullAttestation {
@@ -182,8 +185,12 @@ func main() {
 		domains = []string{baseDomain}
 		log.Warnf("%s challenge: only requesting certificate for base domain", config.TLSChallengeMode)
 	default:
-		// DNS-01, cert-proxy (pure DNS), self-signed: all domains
-		domains = append([]string{baseDomain, wildcardDomain}, encodedDomains...)
+		// DNS-01, cert-proxy (pure DNS), self-signed
+		if config.TLSWildcard {
+			domains = append([]string{baseDomain, "*." + baseDomain}, encodedDomains...)
+		} else {
+			domains = append([]string{baseDomain}, encodedDomains...)
+		}
 	}
 
 	for _, d := range domains {
