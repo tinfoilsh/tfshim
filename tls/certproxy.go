@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,20 +21,27 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// CertProxyManager obtains certificates from a control plane proxy
+// CertProxyManager obtains certificates from a control plane proxy.
+// When httpChallengeDomains is set, it uses a two-phase relay: the control plane
+// handles DNS-01 for encoded SANs while the shim serves HTTP-01 for the base domain.
 type CertProxyManager struct {
-	domains         []string
-	cacheDir        string
-	controlPlaneURL string
-	privateKey      *ecdsa.PrivateKey
+	domains              []string
+	cacheDir             string
+	controlPlaneURL      string
+	privateKey           *ecdsa.PrivateKey
+	httpChallengeDomains []string // domains needing HTTP-01 (empty = pure DNS proxy)
+	listenPort           int      // port for temp HTTP-01 challenge server
 }
 
-// NewCertProxyManager creates a new certificate manager that obtains certs via control plane
+// NewCertProxyManager creates a new certificate manager that obtains certs via control plane.
+// Pass non-empty httpChallengeDomains to enable mixed challenge relay.
 func NewCertProxyManager(
 	domains []string,
 	cacheDir string,
 	controlPlaneURL string,
 	privateKey *ecdsa.PrivateKey,
+	httpChallengeDomains []string,
+	listenPort int,
 ) (*CertProxyManager, error) {
 	if len(domains) == 0 {
 		return nil, fmt.Errorf("at least one domain is required")
@@ -54,10 +62,12 @@ func NewCertProxyManager(
 	}
 
 	return &CertProxyManager{
-		domains:         domains,
-		cacheDir:        cacheDir,
-		controlPlaneURL: controlPlaneURL,
-		privateKey:      privateKey,
+		domains:              domains,
+		cacheDir:             cacheDir,
+		controlPlaneURL:      controlPlaneURL,
+		privateKey:           privateKey,
+		httpChallengeDomains: httpChallengeDomains,
+		listenPort:           listenPort,
 	}, nil
 }
 
@@ -87,7 +97,12 @@ func (m *CertProxyManager) obtainCertificate(certFile, keyFile string) (*tls.Cer
 		return nil, fmt.Errorf("failed to create CSR: %w", err)
 	}
 
-	certPEM, err := m.requestCertificate(csrPEM)
+	var certPEM []byte
+	if len(m.httpChallengeDomains) > 0 {
+		certPEM, err = m.obtainWithHTTPRelay(csrPEM)
+	} else {
+		certPEM, err = m.requestCertificate(csrPEM)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain certificate from control plane: %w", err)
 	}
@@ -111,6 +126,126 @@ func (m *CertProxyManager) obtainCertificate(certFile, keyFile string) (*tls.Cer
 
 	log.Info("Certificate obtained via cert proxy")
 	return &cert, nil
+}
+
+// obtainWithHTTPRelay uses the two-phase relay protocol:
+// Phase 1: send CSR + http_domains, get challenge tokens back
+// Phase 2: serve HTTP-01 challenges, then call /cert/ready to get the certificate
+func (m *CertProxyManager) obtainWithHTTPRelay(csrPEM []byte) ([]byte, error) {
+	log.Infof("Using mixed challenge relay (HTTP-01 for %v)", m.httpChallengeDomains)
+
+	// Phase 1: request order with HTTP challenge domains
+	certURL, err := url.JoinPath(m.controlPlaneURL, "api", "shim", "cert")
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct cert URL: %w", err)
+	}
+
+	reqBody, err := json.Marshal(struct {
+		CSR         string   `json:"csr"`
+		HTTPDomains []string `json:"http_domains"`
+	}{
+		CSR:         string(csrPEM),
+		HTTPDomains: m.httpChallengeDomains,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Post(certURL, "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("phase 1 request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read phase 1 response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("phase 1 error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var phase1 struct {
+		OrderID    string `json:"order_id"`
+		Challenges []struct {
+			Domain           string `json:"domain"`
+			Token            string `json:"token"`
+			KeyAuthorization string `json:"key_authorization"`
+		} `json:"http_challenges"`
+	}
+	if err := json.Unmarshal(body, &phase1); err != nil {
+		return nil, fmt.Errorf("failed to parse phase 1 response: %w", err)
+	}
+
+	if phase1.OrderID == "" || len(phase1.Challenges) == 0 {
+		return nil, fmt.Errorf("phase 1 returned no order_id or challenges")
+	}
+
+	// Set up HTTP challenge handlers, bind port, then serve
+	mux := http.NewServeMux()
+	for _, ch := range phase1.Challenges {
+		keyAuth := ch.KeyAuthorization
+		mux.HandleFunc("/.well-known/acme-challenge/"+ch.Token, func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(keyAuth))
+		})
+		tokenPreview := ch.Token
+		if len(tokenPreview) > 8 {
+			tokenPreview = tokenPreview[:8]
+		}
+		log.Debugf("Serving HTTP-01 challenge for %s (token=%s...)", ch.Domain, tokenPreview)
+	}
+	srv := &http.Server{Handler: mux}
+
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", m.listenPort))
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind HTTP challenge server: %w", err)
+	}
+	go func() {
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Warnf("HTTP challenge server error: %v", err)
+		}
+	}()
+	defer srv.Close()
+
+	// Phase 2: port is bound, signal ready and get certificate
+	readyURL, err := url.JoinPath(m.controlPlaneURL, "api", "shim", "cert", "ready")
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct ready URL: %w", err)
+	}
+
+	readyBody, err := json.Marshal(struct {
+		OrderID string `json:"order_id"`
+	}{OrderID: phase1.OrderID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal ready request: %w", err)
+	}
+
+	resp2, err := client.Post(readyURL, "application/json", bytes.NewReader(readyBody))
+	if err != nil {
+		return nil, fmt.Errorf("phase 2 request failed: %w", err)
+	}
+	defer resp2.Body.Close()
+
+	body2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read phase 2 response: %w", err)
+	}
+	if resp2.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("phase 2 error (status %d): %s", resp2.StatusCode, string(body2))
+	}
+
+	var phase2 struct {
+		Certificate string `json:"certificate"`
+	}
+	if err := json.Unmarshal(body2, &phase2); err != nil {
+		return nil, fmt.Errorf("failed to parse phase 2 response: %w", err)
+	}
+	if phase2.Certificate == "" {
+		return nil, fmt.Errorf("phase 2 returned empty certificate")
+	}
+
+	return []byte(phase2.Certificate), nil
 }
 
 func (m *CertProxyManager) createCSR() ([]byte, error) {

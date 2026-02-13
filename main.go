@@ -122,76 +122,97 @@ func main() {
 		}
 	}
 
-	domains := []string{externalConfig.Domain}
-	domains = append(domains, "*."+externalConfig.Domain) // Also request wildcard domain
+	baseDomain := externalConfig.Domain
+	wildcardDomain := "*." + baseDomain
 
-	// Compute second-level domain from externalConfig.Domain
-	secondLevelDomain := externalConfig.Domain
-	if d, err := publicsuffix.EffectiveTLDPlusOne(externalConfig.Domain); err == nil {
+	// Compute second-level domain
+	secondLevelDomain := baseDomain
+	if d, err := publicsuffix.EffectiveTLDPlusOne(baseDomain); err == nil {
 		secondLevelDomain = d
 	} else {
-		log.Warnf("Failed to compute registrable domain for %q: %v; using as-is", externalConfig.Domain, err)
+		log.Warnf("Failed to compute registrable domain for %q: %v; using as-is", baseDomain, err)
 	}
 	log.Debugf("Second-level domain: %s", secondLevelDomain)
 
-	// Encode HPKE key into domains
+	// Build encoded SANs (HPKE key + attestation)
+	var encodedDomains []string
 	hpkeKeyDomains, err := dcode.Encode(hpkeKeyBytes, "hpke."+secondLevelDomain)
 	if err != nil {
 		log.Fatalf("Failed to encode HPKE key: %v", err)
 	}
-	domains = append(domains, hpkeKeyDomains...)
+	encodedDomains = append(encodedDomains, hpkeKeyDomains...)
 
-	// Encode attestation into domains
 	if config.PublishAttestation {
 		if config.PublishFullAttestation {
 			log.Warn("Publishing full attestation document")
-			// Encode the full attestation document if possible
 			attDomains, err := dcode.EncodeAtt(att, "att."+secondLevelDomain)
 			if err != nil {
 				log.Fatalf("Failed to encode attestation: %v", err)
 			}
-
-			// Limit to 100 domains SANs per certificate
-			if len(attDomains)+len(domains) <= 100 {
-				domains = append(domains, attDomains...)
+			if len(attDomains)+len(encodedDomains)+2 <= 100 { // +2 for base + wildcard
+				encodedDomains = append(encodedDomains, attDomains...)
 			} else {
 				log.Warn("Full attestation too large for certificate SANs, attestation not published")
 			}
-		} else { // (Default) Publish attestation document hash
+		} else {
 			log.Warn("Publishing attestation document hash")
 			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+secondLevelDomain)
 			if err != nil {
 				log.Fatalf("Failed to encode attestation hash: %v", err)
 			}
-			if len(attHashDomains)+len(domains) <= 100 {
-				domains = append(domains, attHashDomains...)
+			if len(attHashDomains)+len(encodedDomains)+2 <= 100 {
+				encodedDomains = append(encodedDomains, attHashDomains...)
 			} else {
 				log.Fatalf("Attestation document hash is too large, cannot publish")
 			}
 		}
 	}
 
+	// Assemble domain list based on provider and challenge type
+	var domains []string
+	switch {
+	case config.TLSMode == "cert-proxy" && config.TLSChallengeMode == "http":
+		// Mixed relay: base domain (HTTP-01) + encoded SANs (DNS-01), no wildcard
+		domains = append([]string{baseDomain}, encodedDomains...)
+		log.Infof("cert-proxy+http: %d domains (base + %d encoded SANs)", len(domains), len(encodedDomains))
+	case config.TLSMode != "cert-proxy" && (config.TLSChallengeMode == "tls" || config.TLSChallengeMode == "http"):
+		// TLS-ALPN-01 or HTTP-01 only (non-cert-proxy): base domain only
+		domains = []string{baseDomain}
+		log.Warnf("%s challenge: only requesting certificate for base domain", config.TLSChallengeMode)
+	default:
+		// DNS-01, cert-proxy (pure DNS), self-signed: all domains
+		domains = append([]string{baseDomain, wildcardDomain}, encodedDomains...)
+	}
+
 	for _, d := range domains {
 		log.Debugf("Domain: %s", d)
 	}
 
-	// Request prod cert if needed
+	// Obtain TLS certificate
 	var cert *tls.Certificate
-	if externalConfig.Domain == "localhost" || config.TLSMode == "self-signed" {
+	if baseDomain == "localhost" || config.TLSMode == "self-signed" {
 		cert, err = tlsutil.Certificate(privateKey, domains...)
 		if err != nil {
 			log.Fatalf("Failed to generate self signed TLS certificate: %v", err)
 		}
 	} else if config.TLSMode == "cert-proxy" {
-		// Use cert proxy manager to obtain certificate from control plane
 		if config.ControlPlane == "" {
-			log.Fatal("cert-proxy mode requires control-plane URL to be set")
+			log.Fatal("cert-proxy requires control-plane URL to be set")
+		}
+		// When tls-challenge is http, use mixed relay (HTTP-01 for base, DNS-01 for encoded SANs)
+		var httpChallengeDomains []string
+		var listenPort int
+		if config.TLSChallengeMode == "http" {
+			httpChallengeDomains = []string{baseDomain}
+			listenPort = config.ListenPort
 		}
 		certProxyManager, err := tlsutil.NewCertProxyManager(
 			domains,
 			config.CacheDir,
 			config.ControlPlane,
 			privateKey,
+			httpChallengeDomains,
+			listenPort,
 		)
 		if err != nil {
 			log.Fatalf("Failed to create cert proxy manager: %v", err)
@@ -206,16 +227,10 @@ func main() {
 			log.Warnf("Certificate request failed, will retry in %s: %v", duration.String(), err)
 			time.Sleep(duration)
 		}
-	} else { // ACME-based TLS cert (tls or dns challenge)
+	} else { // acme: direct ACME via Let's Encrypt
 		dir := lego.LEDirectoryProduction
-		if config.TLSMode == "staging" {
+		if config.TLSEnv == "staging" {
 			dir = lego.LEDirectoryStaging
-		}
-		// TLS-ALPN-01 and HTTP-01 can only validate directly routable domains, not wildcards or encoded SANs
-		// TODO: This is temporary until we can use different challenge modes for different SANs
-		if config.TLSChallengeMode == "tls" || config.TLSChallengeMode == "http" {
-			domains = []string{externalConfig.Domain}
-			log.Warnf("%s challenge: only requesting certificate for base domain", config.TLSChallengeMode)
 		}
 		certManager, err := tlsutil.NewCertManager(
 			domains,
@@ -230,7 +245,7 @@ func main() {
 			log.Fatalf("Failed to create cert manager: %v", err)
 		}
 
-		duration := 18 * time.Minute // Limit set by Let's Encrypt
+		duration := 18 * time.Minute
 		for {
 			cert, err = certManager.Certificate()
 			if err == nil {
