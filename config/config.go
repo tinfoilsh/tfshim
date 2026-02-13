@@ -86,6 +86,9 @@ func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, erro
 	if !slices.Contains([]string{"tls", "dns", "http"}, config.TLSChallengeMode) {
 		return nil, nil, fmt.Errorf("invalid TLS challenge mode: %s (must be tls, dns, or http)", config.TLSChallengeMode)
 	}
+	if config.TLSWildcard && config.TLSChallengeMode != "dns" {
+		return nil, nil, fmt.Errorf("tls-wildcard requires tls-challenge: dns (wildcard certs cannot use %s challenge)", config.TLSChallengeMode)
+	}
 
 	externalConfigBytes, err := os.ReadFile(externalConfigFile)
 	if err != nil {
