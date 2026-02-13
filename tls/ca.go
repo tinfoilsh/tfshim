@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
+	"github.com/go-acme/lego/v4/challenge/http01"
 	"github.com/go-acme/lego/v4/challenge/tlsalpn01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
@@ -42,6 +43,7 @@ func (u *acmeUser) GetPrivateKey() crypto.PrivateKey {
 var (
 	ChallengeModeTLSALPN01 ChallengeMode = "tls"
 	ChallengeModeDNS01     ChallengeMode = "dns"
+	ChallengeModeHTTP01    ChallengeMode = "http"
 )
 
 type ChallengeMode string
@@ -92,6 +94,13 @@ func NewCertManager(
 			tlsalpn01.NewProviderServer("", fmt.Sprintf("%d", port)),
 		); err != nil {
 			return nil, fmt.Errorf("failed to set TLS-ALPN-01 provider: %w", err)
+		}
+	case ChallengeModeHTTP01:
+		// HTTP-01 challenge server listens on the same port as the main HTTPS server.
+		if err := client.Challenge.SetHTTP01Provider(
+			http01.NewProviderServer("", fmt.Sprintf("%d", port)),
+		); err != nil {
+			return nil, fmt.Errorf("failed to set HTTP-01 provider: %w", err)
 		}
 	case ChallengeModeDNS01:
 		dnsConfig := cloudflare.NewDefaultConfig()

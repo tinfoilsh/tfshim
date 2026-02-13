@@ -18,7 +18,7 @@ type Config struct {
 	OriginDomains []string `yaml:"origins"`
 
 	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"` // self-signed | staging | production | cert-proxy
-	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns
+	TLSChallengeMode string `yaml:"tls-challenge" default:"tls"`   // tls | dns | http
 
 	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
 	Authenticated bool   `yaml:"authenticated" default:"false"`
@@ -77,6 +77,9 @@ func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, erro
 	}
 	if !slices.Contains([]string{"self-signed", "staging", "production", "cert-proxy"}, config.TLSMode) {
 		return nil, nil, fmt.Errorf("invalid TLS mode: %s", config.TLSMode)
+	}
+	if !slices.Contains([]string{"tls", "dns", "http"}, config.TLSChallengeMode) {
+		return nil, nil, fmt.Errorf("invalid TLS challenge mode: %s (must be tls, dns, or http)", config.TLSChallengeMode)
 	}
 
 	externalConfigBytes, err := os.ReadFile(externalConfigFile)
