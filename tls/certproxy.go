@@ -180,41 +180,46 @@ func (m *CertProxyManager) obtainWithHTTPRelay(csrPEM []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to parse phase 1 response: %w", err)
 	}
 
-	if phase1.OrderID == "" || len(phase1.Challenges) == 0 {
-		return nil, fmt.Errorf("phase 1 returned no order_id or challenges")
+	if phase1.OrderID == "" {
+		return nil, fmt.Errorf("phase 1 returned no order_id")
 	}
 
-	// Set up HTTP challenge handlers, bind port, then serve
-	mux := http.NewServeMux()
-	for _, ch := range phase1.Challenges {
-		keyAuth := ch.KeyAuthorization
-		mux.HandleFunc("/.well-known/acme-challenge/"+ch.Token, func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(keyAuth))
-		})
-		tokenPreview := ch.Token
-		if len(tokenPreview) > 8 {
-			tokenPreview = tokenPreview[:8]
+	// Serve HTTP-01 challenges if any were returned (skip if control plane
+	// handled all domains via DNS-01, e.g. domains already validated).
+	if len(phase1.Challenges) > 0 {
+		mux := http.NewServeMux()
+		for _, ch := range phase1.Challenges {
+			keyAuth := ch.KeyAuthorization
+			mux.HandleFunc("/.well-known/acme-challenge/"+ch.Token, func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(keyAuth))
+			})
+			tokenPreview := ch.Token
+			if len(tokenPreview) > 8 {
+				tokenPreview = tokenPreview[:8]
+			}
+			log.Debugf("Serving HTTP-01 challenge for %s (token=%s...)", ch.Domain, tokenPreview)
 		}
-		log.Debugf("Serving HTTP-01 challenge for %s (token=%s...)", ch.Domain, tokenPreview)
-	}
-	srv := &http.Server{
-		Handler:           mux,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       10 * time.Second,
-	}
-
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", m.listenPort))
-	if err != nil {
-		return nil, fmt.Errorf("failed to bind HTTP challenge server: %w", err)
-	}
-	go func() {
-		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			log.Warnf("HTTP challenge server error: %v", err)
+		srv := &http.Server{
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       10 * time.Second,
 		}
-	}()
-	defer srv.Close()
 
-	// Phase 2: port is bound, signal ready and get certificate
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", m.listenPort))
+		if err != nil {
+			return nil, fmt.Errorf("failed to bind HTTP challenge server: %w", err)
+		}
+		go func() {
+			if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+				log.Warnf("HTTP challenge server error: %v", err)
+			}
+		}()
+		defer srv.Close()
+	} else {
+		log.Info("No HTTP-01 challenges returned, proceeding directly to phase 2")
+	}
+
+	// Phase 2: signal ready and get certificate
 	readyURL, err := url.JoinPath(m.controlPlaneURL, "api", "shim", "cert", "ready")
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct ready URL: %w", err)
