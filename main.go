@@ -124,18 +124,23 @@ func main() {
 
 	baseDomain := externalConfig.Domain
 
-	// Compute second-level domain
-	secondLevelDomain := baseDomain
-	if d, err := publicsuffix.EffectiveTLDPlusOne(baseDomain); err == nil {
-		secondLevelDomain = d
-	} else {
-		log.Warnf("Failed to compute registrable domain for %q: %v; using as-is", baseDomain, err)
+	// Domain used for encoded SANs (HPKE key, attestation).
+	// Defaults to tinfoil.sh (control plane manages DNS); set own-encoded-domain
+	// to use the base domain instead.
+	encodedSANDomain := "tinfoil.sh"
+	if config.TLSOwnSANDomain {
+		encodedSANDomain = baseDomain
+		if d, err := publicsuffix.EffectiveTLDPlusOne(baseDomain); err == nil {
+			encodedSANDomain = d
+		} else {
+			log.Warnf("Failed to compute registrable domain for %q: %v; using as-is", baseDomain, err)
+		}
 	}
-	log.Debugf("Second-level domain: %s", secondLevelDomain)
+	log.Debugf("Encoded SAN domain: %s", encodedSANDomain)
 
 	// Build encoded SANs (HPKE key + attestation)
 	var encodedDomains []string
-	hpkeKeyDomains, err := dcode.Encode(hpkeKeyBytes, "hpke."+secondLevelDomain)
+	hpkeKeyDomains, err := dcode.Encode(hpkeKeyBytes, "hpke."+encodedSANDomain)
 	if err != nil {
 		log.Fatalf("Failed to encode HPKE key: %v", err)
 	}
@@ -150,7 +155,7 @@ func main() {
 	if config.PublishAttestation {
 		if config.PublishFullAttestation {
 			log.Warn("Publishing full attestation document")
-			attDomains, err := dcode.EncodeAtt(att, "att."+secondLevelDomain)
+			attDomains, err := dcode.EncodeAtt(att, "att."+encodedSANDomain)
 			if err != nil {
 				log.Fatalf("Failed to encode attestation: %v", err)
 			}
@@ -161,7 +166,7 @@ func main() {
 			}
 		} else {
 			log.Warn("Publishing attestation document hash")
-			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+secondLevelDomain)
+			attHashDomains, err := dcode.Encode([]byte(att.Hash()), "hatt."+encodedSANDomain)
 			if err != nil {
 				log.Fatalf("Failed to encode attestation hash: %v", err)
 			}
