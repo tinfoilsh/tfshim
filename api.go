@@ -45,6 +45,25 @@ func pathAllowed(allowedPaths []string, path string) bool {
 	return false
 }
 
+// OpenAI-compatible error type strings returned in API error responses.
+const (
+	errTypeInvalidRequest    = "invalid_request_error"
+	errTypeInsufficientQuota = "insufficient_quota"
+	errTypeServer            = "server_error"
+)
+
+// writeJSONError writes an OpenAI-compatible JSON error response.
+func writeJSONError(w http.ResponseWriter, message string, errorType string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]string{
+			"message": message,
+			"type":    errorType,
+		},
+	})
+}
+
 func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -52,7 +71,7 @@ func corsMiddleware(config *config.Config, next http.Handler) http.Handler {
 			// Allow only configured origins
 			if len(config.OriginDomains) > 0 && !slices.Contains(config.OriginDomains, origin) {
 				log.Debugf("CORS origin not allowed: %s", origin)
-				http.Error(w, "shim: 403 CORS origin not allowed", http.StatusForbidden)
+				writeJSONError(w, "CORS origin not allowed", errTypeInvalidRequest, http.StatusForbidden)
 				return
 			}
 
@@ -120,6 +139,10 @@ func NewShimServer(
 			res.Header.Del(ehbpProtocol.ResponseNonceHeader)
 			return nil
 		},
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Errorf("proxy error: %v", err)
+			writeJSONError(w, "Upstream unavailable", errTypeServer, http.StatusBadGateway)
+		},
 	}
 
 	globalMiddleware := func(next http.Handler) http.Handler {
@@ -133,7 +156,7 @@ func NewShimServer(
 		apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if validator != nil && r.URL.Path == "/v1/chat/completions" {
 			if len(apiKey) == 0 {
-				http.Error(w, "shim: 401 API key required", http.StatusUnauthorized)
+				writeJSONError(w, "API key required", errTypeInvalidRequest, http.StatusUnauthorized)
 				return
 			}
 
@@ -141,9 +164,12 @@ func NewShimServer(
 				log.Warnf("Failed to validate API key: %v", err)
 				var validationErr *online.ValidationError
 				if errors.As(err, &validationErr) {
-					http.Error(w, validationErr.Message, validationErr.StatusCode)
+					// Pass through the JSON error body from the control plane
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(validationErr.StatusCode)
+					fmt.Fprint(w, validationErr.Message)
 				} else {
-					http.Error(w, "shim: 500 validation error", http.StatusInternalServerError)
+					writeJSONError(w, "Validation error", errTypeServer, http.StatusInternalServerError)
 				}
 				return
 			}
@@ -151,18 +177,18 @@ func NewShimServer(
 
 		if rateLimiter != nil {
 			if apiKey == "" {
-				http.Error(w, "shim: 401 API key required", http.StatusUnauthorized)
+				writeJSONError(w, "API key required", errTypeInvalidRequest, http.StatusUnauthorized)
 				return
 			}
 			limiter := rateLimiter.Limit(apiKey)
 			if !limiter.Allow() {
-				http.Error(w, "shim: 429 rate limit exceeded", http.StatusTooManyRequests)
+				writeJSONError(w, "Rate limit exceeded", errTypeInvalidRequest, http.StatusTooManyRequests)
 				return
 			}
 		}
 
 		if len(config.Paths) > 0 && !pathAllowed(config.Paths, r.URL.Path) {
-			http.Error(w, "shim: 403 path not allowed", http.StatusForbidden)
+			writeJSONError(w, "Path not allowed", errTypeInvalidRequest, http.StatusForbidden)
 			return
 		}
 
