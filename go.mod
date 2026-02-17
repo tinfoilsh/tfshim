@@ -1,6 +1,6 @@
 module github.com/tinfoilsh/tfshim
 
-go 1.25.0
+go 1.25.1
 
 require (
 	github.com/NVIDIA/go-nvml v0.13.0-1
@@ -14,7 +14,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
-	github.com/tinfoilsh/encrypted-http-body-protocol v0.1.2
+	github.com/tinfoilsh/encrypted-http-body-protocol v0.1.7
 	github.com/tinfoilsh/verifier v0.1.18
 	golang.org/x/net v0.48.0
 	golang.org/x/time v0.14.0
