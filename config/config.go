@@ -17,11 +17,11 @@ type Config struct {
 	Paths         []string `yaml:"paths"`
 	OriginDomains []string `yaml:"origins"`
 
-	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"`    // self-signed | acme | cert-proxy
-	TLSEnv           string `yaml:"tls-env" default:"production"`     // production | staging
-	TLSChallengeMode string `yaml:"tls-challenge" default:"dns"`      // tls | dns | http
-	TLSWildcard       bool `yaml:"tls-wildcard" default:"false"`        // include wildcard SAN (*.domain)
-	TLSOwnSANDomain   bool `yaml:"tls-own-san-domain" default:"false"` // use own domain for encoded SANs instead of tinfoil.sh
+	TLSMode          string `yaml:"tls-mode" default:"cert-proxy"`      // self-signed | acme | cert-proxy
+	TLSEnv           string `yaml:"tls-env" default:"production"`       // production | staging
+	TLSChallengeMode string `yaml:"tls-challenge" default:"dns"`        // tls | dns | http
+	TLSWildcard      bool   `yaml:"tls-wildcard" default:"false"`       // include wildcard SAN (*.domain)
+	TLSOwnSANDomain  bool   `yaml:"tls-own-san-domain" default:"false"` // use own domain for encoded SANs instead of tinfoil.sh
 
 	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
 	Authenticated bool   `yaml:"authenticated" default:"false"`
@@ -53,6 +53,7 @@ type ExternalConfig struct {
 	CloudflareZoneToken string
 	MetricsAPIKey       string
 	ACPIAPIKey          string
+	CertAuthToken       string
 
 	// New format sections
 	Env      map[string]string `yaml:"env"`
@@ -112,6 +113,7 @@ func Load(configFile, externalConfigFile string) (*Config, *ExternalConfig, erro
 		externalConfig.CloudflareZoneToken = externalConfig.Secrets["cloudflare-zone-token"]
 		externalConfig.MetricsAPIKey = externalConfig.Secrets["metrics-api-key"]
 		externalConfig.ACPIAPIKey = externalConfig.Secrets["acpi-api-key"]
+		externalConfig.CertAuthToken = externalConfig.Secrets["CERT_AUTH_TOKEN"]
 	}
 
 	return &config, &externalConfig, nil
