@@ -227,6 +227,7 @@ func main() {
 			privateKey,
 			httpChallengeDomains,
 			listenPort,
+			externalConfig.CertAuthToken,
 		)
 		if err != nil {
 			log.Fatalf("Failed to create cert proxy manager: %v", err)

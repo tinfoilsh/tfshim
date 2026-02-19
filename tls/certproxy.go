@@ -33,6 +33,7 @@ type CertProxyManager struct {
 	privateKey           *ecdsa.PrivateKey
 	httpChallengeDomains []string // domains needing HTTP-01 (empty = pure DNS proxy)
 	listenPort           int      // port for temp HTTP-01 challenge server
+	certAuthToken        string
 }
 
 // NewCertProxyManager creates a new certificate manager that obtains certs via control plane.
@@ -44,6 +45,7 @@ func NewCertProxyManager(
 	privateKey *ecdsa.PrivateKey,
 	httpChallengeDomains []string,
 	listenPort int,
+	certAuthToken string,
 ) (*CertProxyManager, error) {
 	if len(domains) == 0 {
 		return nil, fmt.Errorf("at least one domain is required")
@@ -70,6 +72,7 @@ func NewCertProxyManager(
 		privateKey:           privateKey,
 		httpChallengeDomains: httpChallengeDomains,
 		listenPort:           listenPort,
+		certAuthToken:        certAuthToken,
 	}, nil
 }
 
@@ -287,9 +290,11 @@ func (m *CertProxyManager) requestCertificate(csrPEM []byte) ([]byte, error) {
 	}
 
 	reqBody := struct {
-		CSR string `json:"csr"`
+		CSR   string `json:"csr"`
+		Token string `json:"token,omitempty"`
 	}{
-		CSR: string(csrPEM),
+		CSR:   string(csrPEM),
+		Token: m.certAuthToken,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
