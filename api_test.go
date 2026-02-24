@@ -1,0 +1,95 @@
+package main
+
+import (
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/tinfoilsh/encrypted-http-body-protocol/identity"
+	"github.com/tinfoilsh/tfshim/config"
+	"github.com/tinfoilsh/verifier/attestation"
+)
+
+func testServer(t *testing.T, paths []string, upstreamPort int) http.Handler {
+	t.Helper()
+
+	id, err := identity.NewIdentity()
+	if err != nil {
+		t.Fatalf("creating identity: %v", err)
+	}
+
+	cfg := &config.Config{
+		UpstreamPort: upstreamPort,
+		Paths:        paths,
+	}
+	extCfg := &config.ExternalConfig{}
+	att := &attestation.Document{
+		Format: "https://tinfoil.sh/predicate/dummy/v2",
+		Body:   "deadbeef",
+	}
+
+	return NewShimServer(nil, nil, att, id, nil, cfg, extCfg)
+}
+
+func TestPathNotAllowed_Returns404(t *testing.T) {
+	handler := testServer(t, []string{"/v1/chat/completions", "/v1/models"}, 9999)
+
+	req := httptest.NewRequest(http.MethodGet, "/booo", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var body map[string]map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if msg := body["error"]["message"]; msg != "Not found." {
+		t.Errorf("expected error message %q, got %q", "Not found.", msg)
+	}
+	if typ := body["error"]["type"]; typ != "invalid_request_error" {
+		t.Errorf("expected error type %q, got %q", "invalid_request_error", typ)
+	}
+}
+
+func TestPathAllowed_ProxiesToUpstream(t *testing.T) {
+	// Start a real upstream that returns 200.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+	}))
+	defer upstream.Close()
+
+	// Parse the port from the test server's listener.
+	port := upstream.Listener.Addr().(*net.TCPAddr).Port
+
+	handler := testServer(t, []string{"/v1/chat/completions"}, port)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/chat/completions", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// EHBP middleware will reject the request (no encapsulated key), but the
+	// important thing is we did NOT get a 404 — the path check let it through.
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("allowed path should not return 404, got: %s", rec.Body.String())
+	}
+}
+
+func TestNoPathsConfigured_AllPathsAllowed(t *testing.T) {
+	handler := testServer(t, nil, 9999)
+
+	req := httptest.NewRequest(http.MethodGet, "/anything/goes", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// With no paths configured, the request should pass through the path check.
+	// It will hit the EHBP middleware, which is fine — just verify it's not 404.
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("with no paths configured, should not return 404, got: %s", rec.Body.String())
+	}
+}
