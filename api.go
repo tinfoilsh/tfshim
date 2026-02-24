@@ -160,7 +160,7 @@ func NewShimServer(
 		})
 	}
 
-	mux.Handle("/", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	proxyHandler := ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if validator != nil && r.URL.Path == "/v1/chat/completions" {
 			if len(apiKey) == 0 {
@@ -195,13 +195,16 @@ func NewShimServer(
 			}
 		}
 
+		proxy.ServeHTTP(w, r)
+	}))
+
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(config.Paths) > 0 && !pathAllowed(config.Paths, r.URL.Path) {
-			writeJSONError(w, "Path not allowed.", errTypeInvalidRequest, http.StatusForbidden)
+			writeJSONError(w, "Not found.", errTypeInvalidRequest, http.StatusNotFound)
 			return
 		}
-
-		proxy.ServeHTTP(w, r)
-	})))
+		proxyHandler.ServeHTTP(w, r)
+	}))
 
 	mux.Handle("/.well-known/tinfoil-attestation", ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
