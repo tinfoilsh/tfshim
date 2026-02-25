@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tinfoilsh/verifier/attestation"
+	"github.com/tinfoilsh/tinfoil-go/verifier/attestation"
 )
 
 func TestDcode(t *testing.T) {

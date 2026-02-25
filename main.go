@@ -16,7 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/tinfoilsh/encrypted-http-body-protocol/identity"
-	"github.com/tinfoilsh/verifier/attestation"
+	"github.com/tinfoilsh/tinfoil-go/verifier/attestation"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/time/rate"
 

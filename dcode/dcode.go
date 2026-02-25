@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tinfoilsh/verifier/attestation"
+	"github.com/tinfoilsh/tinfoil-go/verifier/attestation"
 )
 
 func gzCompress(data []byte) ([]byte, error) {
