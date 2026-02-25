@@ -19,7 +19,7 @@ import (
 	"github.com/tinfoilsh/tfshim/key"
 	"github.com/tinfoilsh/tfshim/key/online"
 	"github.com/tinfoilsh/tfshim/metrics"
-	"github.com/tinfoilsh/verifier/attestation"
+	"github.com/tinfoilsh/tinfoil-go/verifier/attestation"
 )
 
 // pathMatchesPattern checks if a request path matches a pattern.

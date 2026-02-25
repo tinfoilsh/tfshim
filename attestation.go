@@ -11,7 +11,7 @@ import (
 	tdxclient "github.com/google/go-tdx-guest/client"
 	"github.com/klauspost/cpuid/v2"
 	log "github.com/sirupsen/logrus"
-	"github.com/tinfoilsh/verifier/attestation"
+	"github.com/tinfoilsh/tinfoil-go/verifier/attestation"
 )
 
 type AttestationBodyV2 struct {

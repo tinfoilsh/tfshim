@@ -9,7 +9,7 @@ import (
 
 	"github.com/tinfoilsh/encrypted-http-body-protocol/identity"
 	"github.com/tinfoilsh/tfshim/config"
-	"github.com/tinfoilsh/verifier/attestation"
+	"github.com/tinfoilsh/tinfoil-go/verifier/attestation"
 )
 
 func testServer(t *testing.T, paths []string, upstreamPort int) http.Handler {
