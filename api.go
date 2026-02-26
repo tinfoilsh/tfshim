@@ -45,6 +45,17 @@ func pathAllowed(allowedPaths []string, path string) bool {
 	return false
 }
 
+// requiresAuth reports whether path requires API key authentication.
+// If authenticatedEndpoints is nil (not configured), it defaults to only
+// requiring auth for /v1/chat/completions for backwards compatibility.
+// If authenticatedEndpoints is an empty slice, no paths require auth.
+func requiresAuth(authenticatedEndpoints *[]string, path string) bool {
+	if authenticatedEndpoints == nil {
+		return path == "/v1/chat/completions"
+	}
+	return pathAllowed(*authenticatedEndpoints, path)
+}
+
 // OpenAI-compatible error type strings returned in API error responses.
 const (
 	errTypeInvalidRequest    = "invalid_request_error"
@@ -162,7 +173,7 @@ func NewShimServer(
 
 	proxyHandler := ehbpMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if validator != nil && r.URL.Path == "/v1/chat/completions" {
+		if validator != nil && requiresAuth(config.AuthenticatedEndpoints, r.URL.Path) {
 			if len(apiKey) == 0 {
 				writeJSONError(w, errMsgAPIKeyRequired, errTypeInvalidRequest, http.StatusUnauthorized)
 				return
