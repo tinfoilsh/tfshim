@@ -80,6 +80,42 @@ func TestPathAllowed_ProxiesToUpstream(t *testing.T) {
 	}
 }
 
+func TestRequiresAuth(t *testing.T) {
+	ptr := func(s []string) *[]string { return &s }
+
+	tests := []struct {
+		name                   string
+		authenticatedEndpoints *[]string
+		path                   string
+		want                   bool
+	}{
+		// Nil (absent from config): default behaviour — only /v1/chat/completions
+		{"default nil, chat completions", nil, "/v1/chat/completions", true},
+		{"default nil, other path", nil, "/v1/models", false},
+		{"default nil, root", nil, "/", false},
+
+		// Empty list: no endpoints require auth
+		{"empty list, chat completions", ptr([]string{}), "/v1/chat/completions", false},
+		{"empty list, other path", ptr([]string{}), "/v1/models", false},
+
+		// Custom list: only listed patterns require auth
+		{"custom list, exact match", ptr([]string{"/v1/chat/completions", "/v1/embeddings"}), "/v1/chat/completions", true},
+		{"custom list, second entry", ptr([]string{"/v1/chat/completions", "/v1/embeddings"}), "/v1/embeddings", true},
+		{"custom list, unlisted path", ptr([]string{"/v1/chat/completions", "/v1/embeddings"}), "/v1/models", false},
+		{"custom list, wildcard", ptr([]string{"/v1/*"}), "/v1/anything", true},
+		{"custom list, wildcard no match", ptr([]string{"/v1/*"}), "/v2/chat", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := requiresAuth(tt.authenticatedEndpoints, tt.path)
+			if got != tt.want {
+				t.Errorf("requiresAuth(%v, %q) = %v, want %v", tt.authenticatedEndpoints, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNoPathsConfigured_AllPathsAllowed(t *testing.T) {
 	handler := testServer(t, nil, 9999)
 

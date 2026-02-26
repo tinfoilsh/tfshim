@@ -23,8 +23,15 @@ type Config struct {
 	TLSWildcard      bool   `yaml:"tls-wildcard" default:"false"`       // include wildcard SAN (*.domain)
 	TLSOwnSANDomain  bool   `yaml:"tls-own-san-domain" default:"false"` // use own domain for encoded SANs instead of tinfoil.sh
 
-	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
-	Authenticated bool   `yaml:"authenticated" default:"false"`
+	ControlPlane string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
+	// Authenticated enables API key validation against the control plane.
+	// When false, no API key checks are performed regardless of AuthenticatedEndpoints.
+	Authenticated bool `yaml:"authenticated" default:"false"`
+	// AuthenticatedEndpoints is the list of endpoint patterns that require API key authentication.
+	// If absent (nil), defaults to ["/v1/chat/completions"] for backwards compatibility.
+	// If present but empty, no endpoints require authentication.
+	// Supports the same wildcard patterns as Paths (e.g. "/v1/*").
+	AuthenticatedEndpoints *[]string `yaml:"authenticated-endpoints"`
 
 	RateLimit   float64 `yaml:"rate-limit"`
 	RateBurst   int     `yaml:"rate-burst"`
