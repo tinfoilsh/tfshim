@@ -125,9 +125,9 @@ func main() {
 	baseDomain := externalConfig.Domain
 
 	// Domain used for encoded SANs (HPKE key, attestation).
-	// Defaults to tinfoil.sh (control plane manages DNS); set own-encoded-domain
+	// Defaults to tinfoil.dev (control plane manages DNS); set own-encoded-domain
 	// to use the base domain instead.
-	encodedSANDomain := "tinfoil.sh"
+	encodedSANDomain := "tinfoil.dev"
 	if config.TLSOwnSANDomain {
 		encodedSANDomain = baseDomain
 		if d, err := publicsuffix.EffectiveTLDPlusOne(baseDomain); err == nil {

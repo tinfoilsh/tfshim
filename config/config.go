@@ -21,7 +21,7 @@ type Config struct {
 	TLSEnv           string `yaml:"tls-env" default:"production"`       // production | staging
 	TLSChallengeMode string `yaml:"tls-challenge" default:"dns"`        // tls | dns | http
 	TLSWildcard      bool   `yaml:"tls-wildcard" default:"false"`       // include wildcard SAN (*.domain)
-	TLSOwnSANDomain  bool   `yaml:"tls-own-san-domain" default:"false"` // use own domain for encoded SANs instead of tinfoil.sh
+	TLSOwnSANDomain  bool   `yaml:"tls-own-san-domain" default:"false"` // use own domain for encoded SANs instead of tinfoil.dev
 
 	ControlPlane  string `yaml:"control-plane" default:"https://api.tinfoil.sh"`
 	Authenticated bool   `yaml:"authenticated" default:"false"`
