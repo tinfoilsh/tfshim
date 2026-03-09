@@ -1,4 +1,10 @@
-# Tinfoil Attestation Shim
+# [ARCHIVED] Tinfoil Attestation Shim
+
+### This repository has been archived.
+
+**The shim has been merged into [cvmimage](https://github.com/tinfoilsh/cvmimage) at `tinfoil/cmd/shim/`.** All future development happens there.
+
+---
 
 A reverse proxy service that terminates TLS and exposes the attestation attestation report over HTTP.
 
